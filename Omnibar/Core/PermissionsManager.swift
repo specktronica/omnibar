@@ -1,12 +1,16 @@
 import AppKit
 import ApplicationServices
 import Foundation
+import Observation
 
+@Observable
 final class PermissionsManager {
     static let shared = PermissionsManager()
 
     private(set) var accessibilityTrusted: Bool
     private(set) var screenRecordingTrusted: Bool
+
+    private var pollTimer: Timer?
 
     init() {
         accessibilityTrusted = AXIsProcessTrusted()
@@ -20,10 +24,22 @@ final class PermissionsManager {
                 self?.refresh()
             }
         }
+        DistributedNotificationCenter.default().addObserver(
+            forName: Notification.Name("com.apple.accessibility.api"),
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(400))
+                self?.refresh()
+                try? await Task.sleep(for: .milliseconds(800))
+                self?.refresh()
+            }
+        }
     }
 
     func refresh() {
-        let ax = AXIsProcessTrusted()
+        let ax = Self.readAccessibilityTrusted()
         let screen = CGPreflightScreenCaptureAccess()
         let changed = ax != accessibilityTrusted || screen != screenRecordingTrusted
         accessibilityTrusted = ax
@@ -33,11 +49,28 @@ final class PermissionsManager {
         }
     }
 
+    func startPolling() {
+        guard pollTimer == nil else { return }
+        pollTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.refresh()
+            }
+        }
+        pollTimer?.tolerance = 0.2
+        refresh()
+    }
+
+    func stopPolling() {
+        pollTimer?.invalidate()
+        pollTimer = nil
+    }
+
     @discardableResult
     func promptAccessibility() -> Bool {
         let options = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
         let trusted = AXIsProcessTrustedWithOptions(options)
         accessibilityTrusted = trusted
+        startPolling()
         return trusted
     }
 
@@ -45,6 +78,30 @@ final class PermissionsManager {
     func promptScreenRecording() -> Bool {
         let granted = CGRequestScreenCaptureAccess()
         screenRecordingTrusted = granted || CGPreflightScreenCaptureAccess()
+        startPolling()
         return screenRecordingTrusted
+    }
+
+    private static func readAccessibilityTrusted() -> Bool {
+        if AXIsProcessTrusted() { return true }
+        let options = ["AXTrustedCheckOptionPrompt": false] as CFDictionary
+        if AXIsProcessTrustedWithOptions(options) { return true }
+        // AXIsProcessTrusted() can stay false until relaunch after a new grant.
+        // Probe another process: that requires Accessibility and does not depend
+        // on whether Omnibar itself is focused (unlike AXFocusedApplication).
+        return canInspectOtherProcess()
+    }
+
+    private static func canInspectOtherProcess() -> Bool {
+        let selfPID = ProcessInfo.processInfo.processIdentifier
+        guard let other = NSWorkspace.shared.runningApplications.first(where: {
+            $0.processIdentifier != selfPID && $0.activationPolicy == .regular && !$0.isTerminated
+        }) else {
+            return false
+        }
+        let element = AXUIElementCreateApplication(other.processIdentifier)
+        var value: CFTypeRef?
+        let result = AXUIElementCopyAttributeValue(element, kAXRoleAttribute as CFString, &value)
+        return result == .success
     }
 }

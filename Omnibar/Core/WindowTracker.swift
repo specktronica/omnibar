@@ -10,9 +10,12 @@ final class WindowTracker {
     private var pollTimer: Timer?
     private var observers: [pid_t: AXObserverBox] = [:]
     private var workspaceObservers: [NSObjectProtocol] = []
-    private let spaces: SpacesProviding
     private var previousOrderKeys: Set<String> = []
     private var isRunning = false
+    private var coalescer = ScanCoalescer()
+    private var debounceWork: DispatchWorkItem?
+    private var lastScan = ScanResult.empty
+    private var elementCache: [CGWindowID: AXElementRef] = [:]
 
     private let ignoredBundleIDs: Set<String> = [
         "com.apple.dock",
@@ -28,10 +31,6 @@ final class WindowTracker {
         "io.specktronica.omnibar"
     ]
 
-    init(spaces: SpacesProviding = CGSBridge.shared) {
-        self.spaces = spaces
-    }
-
     func start() {
         guard !isRunning else { return }
         isRunning = true
@@ -39,13 +38,16 @@ final class WindowTracker {
         refreshObservers()
         schedulePoll()
         DockBadgeReader.shared.start()
-        reconcile()
+        requestScan(immediate: true)
     }
 
     func stop() {
         isRunning = false
         pollTimer?.invalidate()
         pollTimer = nil
+        debounceWork?.cancel()
+        debounceWork = nil
+        coalescer = ScanCoalescer()
         observers.removeAll()
         for token in workspaceObservers {
             NotificationCenter.default.removeObserver(token)
@@ -55,12 +57,41 @@ final class WindowTracker {
         DockBadgeReader.shared.stop()
     }
 
+    func axElement(for windowID: CGWindowID) -> AXUIElement? {
+        elementCache[windowID]?.element
+    }
+
+    func reconcile() {
+        requestScan(immediate: true)
+    }
+
+    func rebuildFromLastScan() {
+        guard isRunning else { return }
+        rebuildItems(from: lastScan)
+    }
+
+    func requestScan(immediate: Bool = false) {
+        guard isRunning else { return }
+        if immediate {
+            debounceWork?.cancel()
+            debounceWork = nil
+            startScanIfNeeded()
+            return
+        }
+        debounceWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            self?.startScanIfNeeded()
+        }
+        debounceWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: work)
+    }
+
     private func schedulePoll() {
         pollTimer?.invalidate()
         let interval = max(0.5, SettingsStore.shared.settings.pollInterval)
         pollTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
             Task { @MainActor in
-                self?.reconcile()
+                self?.requestScan(immediate: true)
             }
         }
     }
@@ -78,8 +109,11 @@ final class WindowTracker {
         for name in names {
             let token = nc.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
                 Task { @MainActor in
-                    self?.refreshObservers()
-                    self?.reconcile()
+                    if name == NSWorkspace.didLaunchApplicationNotification
+                        || name == NSWorkspace.didTerminateApplicationNotification {
+                        self?.refreshObservers()
+                    }
+                    self?.requestScan()
                 }
             }
             workspaceObservers.append(token)
@@ -96,8 +130,17 @@ final class WindowTracker {
                 Task { @MainActor in
                     if name == .omnibarSettingsDidChange {
                         self?.schedulePoll()
+                        self?.rebuildFromLastScan()
+                        self?.requestScan()
+                    } else if name == .omnibarBlacklistDidChange {
+                        self?.rebuildFromLastScan()
+                        self?.requestScan()
+                    } else if name == .omnibarPinsDidChange
+                        || name == .omnibarBadgesDidChange {
+                        self?.rebuildFromLastScan()
+                    } else {
+                        self?.requestScan()
                     }
-                    self?.reconcile()
                 }
             }
             workspaceObservers.append(token)
@@ -122,7 +165,7 @@ final class WindowTracker {
             guard let refcon else { return }
             let box = Unmanaged<AXObserverBox>.fromOpaque(refcon).takeUnretainedValue()
             Task { @MainActor in
-                WindowTracker.shared.reconcile()
+                WindowTracker.shared.requestScan()
                 _ = box
             }
         }
@@ -146,127 +189,65 @@ final class WindowTracker {
         observers[pid] = box
     }
 
-    func reconcile() {
+    private func startScanIfNeeded() {
         guard isRunning else { return }
         guard PermissionsManager.shared.accessibilityTrusted || AXIsProcessTrusted() else {
+            lastScan = .empty
+            elementCache = [:]
             publish(.empty)
             return
         }
-
-        let settings = SettingsStore.shared.settings
-        let blacklist = BlacklistStore.shared.bundleIDs
-        let onScreen = CGWindowListCopyWindowInfo(.optionOnScreenOnly, kCGNullWindowID) as? [[String: Any]] ?? []
-        let allCGWindows = CGWindowListCopyWindowInfo([], kCGNullWindowID) as? [[String: Any]] ?? []
-
-        var cgByID: [CGWindowID: [String: Any]] = [:]
-        for info in allCGWindows {
-            if let id = (info[kCGWindowNumber as String] as? NSNumber)?.uint32Value {
-                cgByID[id] = info
+        guard coalescer.requestStart() else { return }
+        let request = makeScanRequest()
+        Task { [weak self] in
+            let result = await WindowScanner.shared.scan(request)
+            await MainActor.run {
+                self?.finishScan(result)
             }
         }
-        let onScreenIDs = Set(onScreen.compactMap { ($0[kCGWindowNumber as String] as? NSNumber)?.uint32Value })
+    }
 
-        let frontAppPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
-        var windows: [WindowInfo] = []
-        var seen = Set<CGWindowID>()
+    private func finishScan(_ result: ScanResult) {
+        lastScan = result
+        elementCache = result.elements
+        rebuildItems(from: result)
+        if coalescer.finish() {
+            startScanIfNeeded()
+        }
+    }
 
-        let apps = NSWorkspace.shared.runningApplications.filter { $0.activationPolicy == .regular }
-        for app in apps {
-            let bundleID = app.bundleIdentifier
-            if let bundleID, ignoredBundleIDs.contains(bundleID) || blacklist.contains(bundleID) {
-                continue
-            }
-            let axWindows = AXBridge.windows(forApp: app.processIdentifier)
-            let focused = AXBridge.focusedWindow(forApp: app.processIdentifier)
-            let focusedID = focused.flatMap { AXBridge.cgWindowID(for: $0) }
-
-            for axWindow in axWindows {
-                let role = AXBridge.role(of: axWindow)
-                guard role == (kAXWindowRole as String) || role.isEmpty else { continue }
-                let subrole = AXBridge.subrole(of: axWindow)
-                if subrole == "AXFloatingWindow" || subrole == "AXSystemFloatingWindow" {
-                    let title = AXBridge.title(of: axWindow)
-                    if title.isEmpty { continue }
-                }
-
-                guard let wid = AXBridge.cgWindowID(for: axWindow) else { continue }
-                if seen.contains(wid) { continue }
-                seen.insert(wid)
-
-                let cgInfo = cgByID[wid]
-                let layer = (cgInfo?[kCGWindowLayer as String] as? NSNumber)?.int32Value ?? 0
-                if layer != 0 { continue }
-
-                let boundsDict = cgInfo?[kCGWindowBounds as String] as? [String: CGFloat]
-                let cgFrame: CGRect
-                if let boundsDict {
-                    cgFrame = CGRect(
-                        x: boundsDict["X"] ?? 0,
-                        y: boundsDict["Y"] ?? 0,
-                        width: boundsDict["Width"] ?? 0,
-                        height: boundsDict["Height"] ?? 0
-                    )
-                } else {
-                    cgFrame = AXBridge.frame(of: axWindow) ?? .zero
-                }
-                if cgFrame.width < 40 || cgFrame.height < 40 { continue }
-
-                let title = AXBridge.title(of: axWindow)
-                let isMinimized = AXBridge.isMinimized(axWindow)
-                let isFullscreen = AXBridge.isFullscreen(axWindow)
-                let info = WindowInfo(
-                    id: wid,
+    private func makeScanRequest() -> ScanRequest {
+        let apps = NSWorkspace.shared.runningApplications
+            .filter { $0.activationPolicy == .regular }
+            .map { app in
+                ScanRequest.App(
                     pid: app.processIdentifier,
-                    bundleID: bundleID,
-                    appName: app.localizedName ?? bundleID ?? "App",
-                    title: title,
-                    frame: cgFrame,
-                    screenID: ScreenGeometry.displayID(containingCGRect: cgFrame),
-                    spaces: [],
-                    isMinimized: isMinimized,
-                    isHidden: app.isHidden,
-                    isFullscreen: isFullscreen,
-                    isOnScreen: onScreenIDs.contains(wid),
-                    isTabbed: false,
-                    isActive: (app.processIdentifier == frontAppPID) && (focusedID == wid),
-                    layer: layer
+                    bundleID: app.bundleIdentifier,
+                    appName: app.localizedName ?? app.bundleIdentifier ?? "App",
+                    isHidden: app.isHidden
                 )
-                windows.append(info)
             }
+        let screens = NSScreen.screens.map {
+            ScanRequest.Screen(displayID: $0.displayID, cocoaFrame: $0.frame)
         }
+        return ScanRequest(
+            apps: apps,
+            frontAppPID: NSWorkspace.shared.frontmostApplication?.processIdentifier,
+            screens: screens,
+            cocoaPrimaryHeight: ScreenGeometry.cocoaPrimaryHeight,
+            blacklist: BlacklistStore.shared.bundleIDs,
+            ignoredBundleIDs: ignoredBundleIDs
+        )
+    }
 
-        let spaceMap = spaces.spaces(forWindowIDs: windows.map(\.id))
-        windows = windows.map { window in
-            var copy = window
-            copy = WindowInfo(
-                id: window.id,
-                pid: window.pid,
-                bundleID: window.bundleID,
-                appName: window.appName,
-                title: window.title,
-                frame: window.frame,
-                screenID: window.screenID,
-                spaces: spaceMap[window.id] ?? [],
-                isMinimized: window.isMinimized,
-                isHidden: window.isHidden,
-                isFullscreen: window.isFullscreen,
-                isOnScreen: window.isOnScreen,
-                isTabbed: window.isTabbed,
-                isActive: window.isActive,
-                layer: window.layer
-            )
-            return copy
-        }
-
-        var currentSpaces: [CGDirectDisplayID: UInt64] = [:]
-        var fullscreenDisplays: Set<CGDirectDisplayID> = []
-        for screen in NSScreen.screens {
-            let did = screen.displayID
-            if let space = spaces.currentSpace(forDisplay: did) {
-                currentSpaces[did] = space
-                if spaces.isFullscreenSpace(space) {
-                    fullscreenDisplays.insert(did)
-                }
+    private func rebuildItems(from scan: ScanResult) {
+        let settings = SettingsStore.shared.settings
+        var windows = scan.windows
+        if !BlacklistStore.shared.bundleIDs.isEmpty {
+            let blocked = BlacklistStore.shared.bundleIDs
+            windows = windows.filter { window in
+                guard let bundleID = window.bundleID else { return true }
+                return !blocked.contains(bundleID)
             }
         }
 
@@ -287,7 +268,7 @@ final class WindowTracker {
             let screenWindows = TaskListLogic.windows(
                 from: windows,
                 onScreen: screen.displayID,
-                currentSpace: currentSpaces[screen.displayID],
+                currentSpace: scan.currentSpaces[screen.displayID],
                 settings: settings
             )
             itemsByScreen[screen.displayID] = TaskListLogic.items(
@@ -303,8 +284,8 @@ final class WindowTracker {
         let snap = TaskbarSnapshot(
             windows: windows,
             itemsByScreen: itemsByScreen,
-            currentSpaces: currentSpaces,
-            fullscreenDisplays: fullscreenDisplays,
+            currentSpaces: scan.currentSpaces,
+            fullscreenDisplays: scan.fullscreenDisplays,
             generatedAt: Date()
         )
         publish(snap)
@@ -315,6 +296,7 @@ final class WindowTracker {
     }
 
     private func publish(_ snap: TaskbarSnapshot) {
+        if snap == snapshot { return }
         snapshot = snap
         NotificationCenter.default.post(name: .omnibarSnapshotDidChange, object: snap)
     }

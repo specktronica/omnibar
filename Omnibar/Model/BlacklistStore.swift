@@ -36,6 +36,5 @@ final class BlacklistStore {
     private func persist() {
         UserDefaults.standard.set(Array(bundleIDs).sorted(), forKey: defaultsKey)
         NotificationCenter.default.post(name: .omnibarBlacklistDidChange, object: nil)
-        WindowTracker.shared.reconcile()
     }
 }

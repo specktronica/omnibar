@@ -179,6 +179,61 @@ final class AppCatalogGroupingTests: XCTestCase {
     }
 }
 
+final class ScanCoalescerTests: XCTestCase {
+    func testCoalescesWhileScanIsInFlight() {
+        var coalescer = ScanCoalescer()
+        XCTAssertTrue(coalescer.requestStart())
+        XCTAssertFalse(coalescer.requestStart())
+        XCTAssertTrue(coalescer.needsRescan)
+        XCTAssertTrue(coalescer.finish())
+        XCTAssertTrue(coalescer.requestStart())
+        XCTAssertFalse(coalescer.finish())
+    }
+
+    func testFinishWithoutQueuedScanDoesNotRestart() {
+        var coalescer = ScanCoalescer()
+        XCTAssertTrue(coalescer.requestStart())
+        XCTAssertFalse(coalescer.finish())
+        XCTAssertFalse(coalescer.isScanning)
+        XCTAssertFalse(coalescer.needsRescan)
+    }
+}
+
+final class ScanGeometryTests: XCTestCase {
+    func testLooksLikeFullscreenMatchesDisplaySize() {
+        let sizes = [CGSize(width: 1920, height: 1080), CGSize(width: 1512, height: 982)]
+        XCTAssertTrue(ScanGeometry.looksLikeFullscreen(
+            CGRect(x: 0, y: 0, width: 1920, height: 1080),
+            screenSizes: sizes
+        ))
+        XCTAssertFalse(ScanGeometry.looksLikeFullscreen(
+            CGRect(x: 80, y: 80, width: 800, height: 600),
+            screenSizes: sizes
+        ))
+    }
+}
+
+final class ScreenGeometryTests: XCTestCase {
+    func testDisplayIDUsesContainingScreen() {
+        let screens: [(id: CGDirectDisplayID, frame: CGRect)] = [
+            (1, CGRect(x: 0, y: 0, width: 1920, height: 1080)),
+            (2, CGRect(x: 1920, y: 0, width: 1920, height: 1080))
+        ]
+        let left = ScreenGeometry.displayID(
+            containingCGRect: CGRect(x: 10, y: 10, width: 100, height: 100),
+            screens: screens,
+            cocoaPrimaryHeight: 1080
+        )
+        XCTAssertEqual(left, 1)
+        let right = ScreenGeometry.displayID(
+            containingCGRect: CGRect(x: 2000, y: 10, width: 100, height: 100),
+            screens: screens,
+            cocoaPrimaryHeight: 1080
+        )
+        XCTAssertEqual(right, 2)
+    }
+}
+
 @MainActor
 func stubWindow(
     id: CGWindowID,

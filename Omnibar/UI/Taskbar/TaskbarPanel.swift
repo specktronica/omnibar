@@ -124,8 +124,10 @@ final class TaskbarPanel: NSPanel {
         if autoHidden && settings.autoHide && !isSuppressed {
             frame.origin.y = currentScreen.frame.minY - height + 2
         }
-        setFrame(frame, display: true)
-        if !isSuppressed {
+        if self.frame != frame {
+            setFrame(frame, display: true)
+        }
+        if !isSuppressed, !isVisible {
             orderFrontRegardless()
         }
         effectView.frame = contentView?.bounds ?? .zero
@@ -256,6 +258,6 @@ final class TaskbarPanel: NSPanel {
             PinStore.shared.replace(pinIDs + remaining)
         }
         OrderStore.shared.replace(windowKeys)
-        WindowTracker.shared.reconcile()
+        WindowTracker.shared.rebuildFromLastScan()
     }
 }

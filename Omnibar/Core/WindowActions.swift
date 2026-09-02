@@ -4,7 +4,7 @@ import Foundation
 enum WindowActions {
     static func raise(_ window: WindowInfo) {
         activate(pid: window.pid)
-        if let element = AXBridge.element(forWindowID: window.id, pid: window.pid) {
+        if let element = element(for: window) {
             if window.isMinimized {
                 AXBridge.setMinimized(element, false)
             }
@@ -14,7 +14,7 @@ enum WindowActions {
     }
 
     static func minimize(_ window: WindowInfo) {
-        if let element = AXBridge.element(forWindowID: window.id, pid: window.pid) {
+        if let element = element(for: window) {
             AXBridge.setMinimized(element, true)
         }
     }
@@ -24,13 +24,13 @@ enum WindowActions {
     }
 
     static func close(_ window: WindowInfo) {
-        if let element = AXBridge.element(forWindowID: window.id, pid: window.pid) {
+        if let element = element(for: window) {
             AXBridge.pressCloseButton(element)
         }
     }
 
     static func fullscreen(_ window: WindowInfo) {
-        if let element = AXBridge.element(forWindowID: window.id, pid: window.pid) {
+        if let element = element(for: window) {
             AXBridge.setFullscreen(element, !window.isFullscreen)
         }
     }
@@ -84,6 +84,11 @@ enum WindowActions {
                 raise(first)
             }
         }
+    }
+
+    private static func element(for window: WindowInfo) -> AXUIElement? {
+        WindowTracker.shared.axElement(for: window.id)
+            ?? AXBridge.element(forWindowID: window.id, pid: window.pid)
     }
 
     private static func activate(pid: pid_t) {

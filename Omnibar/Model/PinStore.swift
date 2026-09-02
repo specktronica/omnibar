@@ -53,6 +53,5 @@ final class PinStore {
     private func persist() {
         UserDefaults.standard.set(pinnedBundleIDs, forKey: defaultsKey)
         NotificationCenter.default.post(name: .omnibarPinsDidChange, object: nil)
-        WindowTracker.shared.reconcile()
     }
 }

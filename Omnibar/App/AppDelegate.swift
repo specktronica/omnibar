@@ -39,12 +39,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        if !PermissionsManager.shared.accessibilityTrusted {
-            OnboardingWindow.show()
-        } else {
+        if OnboardingWindow.shouldIgnoreReopen {
+            return false
+        }
+        if OnboardingWindow.isShowing {
+            OnboardingWindow.reveal()
+            return false
+        }
+        if PermissionsManager.shared.accessibilityTrusted {
             SettingsWindow.show()
         }
         return false
+    }
+
+    func applicationDidBecomeActive(_ notification: Notification) {
+        PermissionsManager.shared.refresh()
+        if OnboardingWindow.isShowing {
+            OnboardingWindow.reveal()
+        }
+    }
+
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        false
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -56,11 +72,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func startIfPossible() {
         PermissionsManager.shared.refresh()
-        guard PermissionsManager.shared.accessibilityTrusted else {
-            OnboardingWindow.show()
-            return
-        }
-        OnboardingWindow.closeIfTrusted()
+        guard PermissionsManager.shared.accessibilityTrusted else { return }
         guard !started else { return }
         started = true
         WindowTracker.shared.start()

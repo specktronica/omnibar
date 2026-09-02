@@ -13,6 +13,8 @@ final class ThumbnailService {
     private var cache: [CGWindowID: Entry] = [:]
     private let cacheLimit = 40
     private var inFlight: Set<CGWindowID> = []
+    private var shareableContent: SCShareableContent?
+    private var shareableContentDate: Date = .distantPast
 
     func cached(windowID: CGWindowID) -> NSImage? {
         cache[windowID]?.image
@@ -34,7 +36,7 @@ final class ThumbnailService {
         defer { inFlight.remove(windowID) }
 
         do {
-            let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
+            let content = try await shareableContentIfNeeded()
             guard let window = content.windows.first(where: { $0.windowID == windowID }) else {
                 return cache[windowID]?.image
             }
@@ -65,5 +67,15 @@ final class ThumbnailService {
         } catch {
             return cache[windowID]?.image
         }
+    }
+
+    private func shareableContentIfNeeded() async throws -> SCShareableContent {
+        if let shareableContent, Date().timeIntervalSince(shareableContentDate) < 2 {
+            return shareableContent
+        }
+        let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
+        shareableContent = content
+        shareableContentDate = Date()
+        return content
     }
 }

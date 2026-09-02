@@ -4,13 +4,17 @@ import Foundation
 typealias CGSConnectionID = Int32
 typealias CGSSpaceID = UInt64
 
-protocol SpacesProviding: AnyObject {
+nonisolated protocol SpacesProviding: AnyObject, Sendable {
     func currentSpace(forDisplay displayID: CGDirectDisplayID) -> UInt64?
     func isFullscreenSpace(_ space: UInt64) -> Bool
     func spaces(forWindowIDs ids: [CGWindowID]) -> [CGWindowID: [UInt64]]
+    func displaySpaceState(displayIDs: [CGDirectDisplayID]) -> (
+        current: [CGDirectDisplayID: UInt64],
+        fullscreen: Set<CGDirectDisplayID>
+    )
 }
 
-final class CGSBridge: SpacesProviding {
+nonisolated final class CGSBridge: SpacesProviding, Sendable {
     static let shared = CGSBridge()
 
     private typealias MainConnectionProc = @convention(c) () -> CGSConnectionID
@@ -74,6 +78,34 @@ final class CGSBridge: SpacesProviding {
             return proc(connection, CGSSpaceID(space)) == Self.fullscreenSpaceType
         }
         return false
+    }
+
+    func displaySpaceState(displayIDs: [CGDirectDisplayID]) -> (
+        current: [CGDirectDisplayID: UInt64],
+        fullscreen: Set<CGDirectDisplayID>
+    ) {
+        var current: [CGDirectDisplayID: UInt64] = [:]
+        var fullscreen: Set<CGDirectDisplayID> = []
+        if let parsed = managedSpaces() {
+            for displayID in displayIDs {
+                guard let match = parsed.first(where: { $0.displayID == displayID }) else { continue }
+                current[displayID] = match.currentSpace
+                let type = match.spaceTypes[match.currentSpace] ?? match.currentType
+                if type == Self.fullscreenSpaceType {
+                    fullscreen.insert(displayID)
+                }
+            }
+            return (current, fullscreen)
+        }
+        for displayID in displayIDs {
+            if let space = currentSpace(forDisplay: displayID) {
+                current[displayID] = space
+                if isFullscreenSpace(space) {
+                    fullscreen.insert(displayID)
+                }
+            }
+        }
+        return (current, fullscreen)
     }
 
     func spaces(forWindowIDs ids: [CGWindowID]) -> [CGWindowID: [UInt64]] {
@@ -151,7 +183,7 @@ final class CGSBridge: SpacesProviding {
     }
 }
 
-private enum DisplayUUID {
+private nonisolated enum DisplayUUID {
     private typealias Proc = @convention(c) (CGDirectDisplayID) -> Unmanaged<CFUUID>?
     private static let proc: Proc? = {
         let handle = dlopen("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics", RTLD_LAZY)

@@ -32,11 +32,16 @@ final class OrderStore {
     }
 
     func sorted<T>(_ items: [T], key: (T) -> String) -> [T] {
-        items.sorted { a, b in
+        var index: [String: Int] = [:]
+        index.reserveCapacity(order.count)
+        for (i, k) in order.enumerated() where index[k] == nil {
+            index[k] = i
+        }
+        return items.sorted { a, b in
             let ka = key(a)
             let kb = key(b)
-            let ia = order.firstIndex(of: ka) ?? Int.max
-            let ib = order.firstIndex(of: kb) ?? Int.max
+            let ia = index[ka] ?? Int.max
+            let ib = index[kb] ?? Int.max
             if ia != ib { return ia < ib }
             return ka < kb
         }

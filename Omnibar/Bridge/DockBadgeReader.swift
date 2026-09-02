@@ -8,6 +8,10 @@ final class DockBadgeReader {
     private var badges: [String: String] = [:]
     private var timer: Timer?
     private var nameToBundle: [String: String] = [:]
+    private var nameMapAppPIDs: Set<pid_t> = []
+    private var nameMapPins: [String] = []
+    private var refreshInFlight = false
+    private var refreshQueued = false
 
     func start() {
         stop()
@@ -22,6 +26,8 @@ final class DockBadgeReader {
     func stop() {
         timer?.invalidate()
         timer = nil
+        refreshInFlight = false
+        refreshQueued = false
     }
 
     func badge(forBundleID bundleID: String) -> String? {
@@ -33,62 +39,48 @@ final class DockBadgeReader {
         guard let dock = NSWorkspace.shared.runningApplications.first(where: { $0.bundleIdentifier == "com.apple.dock" }) else {
             return
         }
-        rebuildNameMap()
-        let app = AXBridge.application(pid: dock.processIdentifier)
-        let lists = AXBridge.copyElements(app, attribute: kAXChildrenAttribute as String)
-        var next: [String: String] = [:]
-        for list in lists {
-            collect(from: list, into: &next)
+        if refreshInFlight {
+            refreshQueued = true
+            return
         }
-        if next != badges {
-            badges = next
-            NotificationCenter.default.post(name: .omnibarBadgesDidChange, object: nil)
-        }
-    }
-
-    private func collect(from element: AXUIElement, into result: inout [String: String]) {
-        let role = AXBridge.role(of: element)
-        let title = AXBridge.title(of: element)
-        let label = AXBridge.copyString(element, attribute: "AXStatusLabel")
-            ?? AXBridge.copyString(element, attribute: kAXDescriptionAttribute as String)
-        if role.contains("DockItem") || role == "AXApplicationDockItem" {
-            if let label, !label.isEmpty, isBadge(label) {
-                if let bundleID = bundleID(forDockTitle: title, element: element) {
-                    result[bundleID] = label
+        refreshInFlight = true
+        rebuildNameMapIfNeeded()
+        let pid = dock.processIdentifier
+        let nameMap = nameToBundle
+        Task {
+            let next = await WindowScanner.shared.readDockBadges(dockPID: pid, nameMap: nameMap)
+            await MainActor.run {
+                self.refreshInFlight = false
+                if next != self.badges {
+                    self.badges = next
+                    NotificationCenter.default.post(name: .omnibarBadgesDidChange, object: nil)
+                }
+                if self.refreshQueued {
+                    self.refreshQueued = false
+                    self.refresh()
                 }
             }
         }
-        for child in AXBridge.copyElements(element, attribute: kAXChildrenAttribute as String) {
-            collect(from: child, into: &result)
-        }
     }
 
-    private func isBadge(_ value: String) -> Bool {
+    nonisolated static func isBadgeLabel(_ value: String) -> Bool {
         if Int(value) != nil { return true }
         return value == "•" || value.lowercased() == "new"
     }
 
-    private func bundleID(forDockTitle title: String, element: AXUIElement) -> String? {
-        if let url = AXBridge.copyURL(element, attribute: kAXURLAttribute as String)
-            ?? AXBridge.copyURL(element, attribute: "AXURL") {
-            if let bundle = Bundle(url: url), let id = bundle.bundleIdentifier {
-                return id
-            }
-            if url.path.hasSuffix(".app") {
-                return Bundle(url: url)?.bundleIdentifier
-            }
-        }
-        return nameToBundle[title.lowercased()]
-    }
-
-    private func rebuildNameMap() {
+    private func rebuildNameMapIfNeeded() {
+        let pids = Set(NSWorkspace.shared.runningApplications.map(\.processIdentifier))
+        let pins = PinStore.shared.pinnedBundleIDs
+        if pids == nameMapAppPIDs && pins == nameMapPins { return }
+        nameMapAppPIDs = pids
+        nameMapPins = pins
         var map: [String: String] = [:]
         for app in NSWorkspace.shared.runningApplications {
             if let name = app.localizedName, let id = app.bundleIdentifier {
                 map[name.lowercased()] = id
             }
         }
-        for id in PinStore.shared.pinnedBundleIDs {
+        for id in pins {
             map[IconCache.appName(for: id).lowercased()] = id
         }
         nameToBundle = map

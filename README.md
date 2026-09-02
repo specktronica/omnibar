@@ -12,7 +12,7 @@ Minimum macOS: 14. Built with Swift 6 and AppKit.
 open build/Omnibar.app
 ```
 
-`bootstrap.sh` generates `Omnibar.xcodeproj` with XcodeGen. `build.sh` produces an ad-hoc signed `build/Omnibar.app`.
+`bootstrap.sh` generates `Omnibar.xcodeproj` with XcodeGen. `build.sh` produces `build/Omnibar.app`, signed with the "Apple Development" identity from your keychain when one is installed, or ad-hoc otherwise. Set `CODESIGN_IDENTITY` to pick a specific identity.
 
 Or open the generated project:
 
@@ -26,7 +26,14 @@ open Omnibar.xcodeproj
 - **Accessibility** (required): list windows, raise / minimize / close / fullscreen, and read Dock badges.
 - **Screen Recording** (optional): live hover thumbnails. Without it, the preview shows the app icon and title.
 
-Grant Accessibility to the exact binary you launched. Rebuilding in place can require granting it again.
+macOS records permission grants against the app's code-signing requirement. With a real signing identity the requirement is based on bundle ID and team, so grants survive rebuilds. With an ad-hoc signature the requirement is a per-build `cdhash`, so every rebuild needs a fresh grant: System Settings still shows Omnibar as enabled, but the new binary is not trusted. If that happens, remove the stale entry and grant again:
+
+```bash
+tccutil reset Accessibility io.specktronica.omnibar
+tccutil reset ScreenCapture io.specktronica.omnibar
+```
+
+Run only one copy of Omnibar at a time. Two builds with different signatures share the same bundle ID, and only one can match the recorded grant.
 
 Launch at login is available in Settings → General (`SMAppService`).
 

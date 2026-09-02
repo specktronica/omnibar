@@ -10,29 +10,46 @@ enum ScreenGeometry {
     }
 
     static func cocoaRect(fromCGRect rect: CGRect) -> CGRect {
+        cocoaRect(fromCGRect: rect, primaryHeight: cocoaPrimaryHeight)
+    }
+
+    nonisolated static func cocoaRect(fromCGRect rect: CGRect, primaryHeight: CGFloat) -> CGRect {
         CGRect(
             x: rect.origin.x,
-            y: cocoaPrimaryHeight - rect.origin.y - rect.height,
+            y: primaryHeight - rect.origin.y - rect.height,
             width: rect.width,
             height: rect.height
         )
     }
 
     static func displayID(containingCGRect rect: CGRect) -> CGDirectDisplayID? {
-        let cocoa = cocoaRect(fromCGRect: rect)
+        let screens = NSScreen.screens.map { (id: $0.displayID, frame: $0.frame) }
+        return displayID(
+            containingCGRect: rect,
+            screens: screens,
+            cocoaPrimaryHeight: cocoaPrimaryHeight
+        ) ?? NSScreen.main?.displayID
+    }
+
+    nonisolated static func displayID(
+        containingCGRect rect: CGRect,
+        screens: [(id: CGDirectDisplayID, frame: CGRect)],
+        cocoaPrimaryHeight: CGFloat
+    ) -> CGDirectDisplayID? {
+        let cocoa = cocoaRect(fromCGRect: rect, primaryHeight: cocoaPrimaryHeight)
         let center = CGPoint(x: cocoa.midX, y: cocoa.midY)
-        if let screen = NSScreen.screens.first(where: { $0.frame.contains(center) }) {
-            return screen.displayID
+        if let screen = screens.first(where: { $0.frame.contains(center) }) {
+            return screen.id
         }
         var best: (CGDirectDisplayID, CGFloat)?
-        for screen in NSScreen.screens {
+        for screen in screens {
             let intersection = screen.frame.intersection(cocoa)
             let area = intersection.isNull ? 0 : intersection.width * intersection.height
             if area > 0, best == nil || area > best!.1 {
-                best = (screen.displayID, area)
+                best = (screen.id, area)
             }
         }
-        return best?.0 ?? NSScreen.main?.displayID
+        return best?.0
     }
 
     static func taskbarFrame(on screen: NSScreen, height: CGFloat) -> CGRect {

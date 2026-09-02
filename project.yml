@@ -22,8 +22,14 @@ settings:
     INFOPLIST_KEY_NSAccessibilityUsageDescription: "Omnibar needs Accessibility to list windows, switch between them, and control minimize, close, and fullscreen."
     INFOPLIST_KEY_NSScreenCaptureUsageDescription: "Omnibar uses Screen Recording to show live window thumbnails on hover. This permission is optional."
     CODE_SIGN_ENTITLEMENTS: Omnibar/Resources/Omnibar.entitlements
-    CODE_SIGN_IDENTITY: "-"
-    CODE_SIGN_STYLE: Automatic
+    # A stable signing identity is required for TCC (Accessibility, Screen
+    # Recording) grants to survive rebuilds. Ad-hoc ("-") signatures produce a
+    # cdhash-based designated requirement that changes on every build, so the
+    # grant in System Settings stops matching the running binary.
+    # scripts/build.sh overrides these to ad-hoc when no identity is installed.
+    CODE_SIGN_IDENTITY: "Apple Development"
+    DEVELOPMENT_TEAM: Y3QXTYSC64
+    CODE_SIGN_STYLE: Manual
     ENABLE_HARDENED_RUNTIME: YES
     ENABLE_APP_SANDBOX: NO
     COMBINE_HIDPI_IMAGES: YES

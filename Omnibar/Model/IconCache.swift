@@ -3,6 +3,7 @@ import Foundation
 
 enum IconCache {
     private static var cache: [String: NSImage] = [:]
+    private static var names: [String: String] = [:]
 
     static func icon(forBundleID bundleID: String) -> NSImage? {
         if let cached = cache[bundleID] { return cached }
@@ -21,15 +22,17 @@ enum IconCache {
     }
 
     static func appName(for bundleID: String) -> String {
+        if let cached = names[bundleID] { return cached }
+        var name = bundleID
         if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID),
            let bundle = Bundle(url: url) {
-            if let name = bundle.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String, !name.isEmpty {
-                return name
-            }
-            if let name = bundle.object(forInfoDictionaryKey: "CFBundleName") as? String, !name.isEmpty {
-                return name
+            if let display = bundle.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String, !display.isEmpty {
+                name = display
+            } else if let bundleName = bundle.object(forInfoDictionaryKey: "CFBundleName") as? String, !bundleName.isEmpty {
+                name = bundleName
             }
         }
-        return bundleID
+        names[bundleID] = name
+        return name
     }
 }

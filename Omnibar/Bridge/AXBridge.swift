@@ -2,9 +2,26 @@ import ApplicationServices
 import CoreGraphics
 import Foundation
 
-enum AXBridge {
+nonisolated struct AXElementRef: @unchecked Sendable {
+    nonisolated(unsafe) let element: AXUIElement
+
+    nonisolated init(_ element: AXUIElement) {
+        self.element = element
+    }
+}
+
+nonisolated enum AXBridge {
+    static let systemTimeout: Float = 1.0
+    static let appTimeout: Float = 0.5
+
+    static func configureSystemTimeout() {
+        AXUIElementSetMessagingTimeout(AXUIElementCreateSystemWide(), systemTimeout)
+    }
+
     static func application(pid: pid_t) -> AXUIElement {
-        AXUIElementCreateApplication(pid)
+        let app = AXUIElementCreateApplication(pid)
+        AXUIElementSetMessagingTimeout(app, appTimeout)
+        return app
     }
 
     static func windows(forApp pid: pid_t) -> [AXUIElement] {
@@ -189,7 +206,7 @@ enum AXBridge {
     }
 }
 
-private enum WindowIDResolver {
+private nonisolated enum WindowIDResolver {
     private typealias GetWindowProc = @convention(c) (AXUIElement, UnsafeMutablePointer<CGWindowID>) -> AXError
     private static let proc: GetWindowProc? = {
         let handle = UnsafeMutableRawPointer(bitPattern: -2) // RTLD_DEFAULT

@@ -2,9 +2,20 @@ import AppKit
 import SwiftUI
 
 enum OnboardingWindow {
-    static var controller: NSWindowController?
+    static var isShowing = false
+
+    private static var controller: NSWindowController?
+    private static let windowDelegate = OnboardingWindowDelegate()
+    private static var suppressReopen = false
+    private static var reopenSuppressWork: DispatchWorkItem?
+
+    static var shouldIgnoreReopen: Bool { suppressReopen }
 
     static func show() {
+        isShowing = true
+        PermissionsManager.shared.startPolling()
+        NSApp.setActivationPolicy(.regular)
+        windowDelegate.startObservingSystemSettings()
         if controller == nil {
             let hosting = NSHostingController(rootView: PermissionsView())
             let window = NSWindow(contentViewController: hosting)
@@ -12,23 +23,107 @@ enum OnboardingWindow {
             window.styleMask = [.titled, .closable]
             window.setContentSize(NSSize(width: 460, height: 360))
             window.center()
+            window.isReleasedWhenClosed = false
+            window.hidesOnDeactivate = false
+            window.canHide = false
+            window.delegate = windowDelegate
             controller = NSWindowController(window: window)
         }
-        NSApp.activate()
-        controller?.showWindow(nil)
-        controller?.window?.makeKeyAndOrderFront(nil)
+        reveal()
     }
 
-    static func closeIfTrusted() {
-        if PermissionsManager.shared.accessibilityTrusted {
-            controller?.close()
+    static func reveal() {
+        guard isShowing, let window = controller?.window else { return }
+        if NSApp.isHidden {
+            NSApp.unhide(nil)
         }
+        NSApp.setActivationPolicy(.regular)
+        controller?.showWindow(nil)
+        window.makeKeyAndOrderFront(nil)
+        if !NSApp.isActive {
+            NSApp.activate()
+        }
+        // LSUIElement apps are not activated at launch, and cooperative
+        // activation on macOS 14+ can be refused while another app is active.
+        // makeKeyAndOrderFront keeps an inactive app's window behind the active
+        // app, so force it above other apps' windows as the last step.
+        window.orderFrontRegardless()
+        PermissionsManager.shared.refresh()
+    }
+
+    static func dismiss() {
+        guard isShowing else { return }
+        controller?.window?.canHide = true
+        controller?.close()
+    }
+
+    static func finish() {
+        guard isShowing else { return }
+        isShowing = false
+        PermissionsManager.shared.stopPolling()
+        beginReopenSuppression()
+        NSApp.setActivationPolicy(.accessory)
+        if PermissionsManager.shared.accessibilityTrusted {
+            NotificationCenter.default.post(name: .omnibarPermissionsDidChange, object: nil)
+        }
+    }
+
+    private static func beginReopenSuppression() {
+        suppressReopen = true
+        reopenSuppressWork?.cancel()
+        let work = DispatchWorkItem { suppressReopen = false }
+        reopenSuppressWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0, execute: work)
+    }
+
+    static func handleSystemSettingsDidQuit() {
+        guard isShowing else { return }
+        reveal()
+    }
+}
+
+private final class OnboardingWindowDelegate: NSObject, NSWindowDelegate {
+    private var workspaceTokens: [NSObjectProtocol] = []
+    private static let systemSettingsBundleIDs: Set<String> = [
+        "com.apple.systempreferences",
+        "com.apple.Preferences"
+    ]
+
+    func startObservingSystemSettings() {
+        guard workspaceTokens.isEmpty else { return }
+        let nc = NSWorkspace.shared.notificationCenter
+        // Losing focus only triggers a permission re-check. Activating Omnibar
+        // on every deactivate would steal focus when the user switches to an
+        // unrelated app. Quitting System Settings brings the window back.
+        let handlers: [(Notification.Name, @MainActor () -> Void)] = [
+            (NSWorkspace.didDeactivateApplicationNotification, { PermissionsManager.shared.refresh() }),
+            (NSWorkspace.didTerminateApplicationNotification, { OnboardingWindow.handleSystemSettingsDidQuit() })
+        ]
+        for (name, handler) in handlers {
+            let token = nc.addObserver(forName: name, object: nil, queue: .main) { notification in
+                let bundleID = (notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication)?
+                    .bundleIdentifier
+                Task { @MainActor in
+                    guard let bundleID, Self.systemSettingsBundleIDs.contains(bundleID) else { return }
+                    handler()
+                }
+            }
+            workspaceTokens.append(token)
+        }
+    }
+
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        if !OnboardingWindow.isShowing { return true }
+        return NSApp.isActive
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        OnboardingWindow.finish()
     }
 }
 
 struct PermissionsView: View {
-    @State private var accessibility = PermissionsManager.shared.accessibilityTrusted
-    @State private var screen = PermissionsManager.shared.screenRecordingTrusted
+    private let permissions = PermissionsManager.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -39,46 +134,36 @@ struct PermissionsView: View {
             permissionRow(
                 title: "Accessibility",
                 subtitle: "Required to read window titles and raise, minimize, or close windows.",
-                granted: accessibility,
+                granted: permissions.accessibilityTrusted,
                 actionTitle: "Enable Accessibility"
             ) {
                 _ = PermissionsManager.shared.promptAccessibility()
-                refresh()
             }
             permissionRow(
                 title: "Screen Recording",
                 subtitle: "Optional. Enables live window thumbnails on hover.",
-                granted: screen,
+                granted: permissions.screenRecordingTrusted,
                 actionTitle: "Enable Screen Recording"
             ) {
                 _ = PermissionsManager.shared.promptScreenRecording()
-                refresh()
             }
             Spacer()
             HStack {
                 Spacer()
                 Button("Continue") {
-                    OnboardingWindow.closeIfTrusted()
-                    NotificationCenter.default.post(name: .omnibarPermissionsDidChange, object: nil)
+                    OnboardingWindow.dismiss()
                 }
                 .keyboardShortcut(.defaultAction)
-                .disabled(!accessibility)
+                .disabled(!permissions.accessibilityTrusted)
             }
         }
         .padding(24)
         .frame(width: 460, height: 340)
-        .onAppear { refresh() }
-        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-            refresh()
+        .onAppear {
+            PermissionsManager.shared.refresh()
         }
-    }
-
-    private func refresh() {
-        PermissionsManager.shared.refresh()
-        accessibility = PermissionsManager.shared.accessibilityTrusted
-        screen = PermissionsManager.shared.screenRecordingTrusted
-        if accessibility {
-            OnboardingWindow.closeIfTrusted()
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            PermissionsManager.shared.refresh()
         }
     }
 

@@ -47,7 +47,8 @@ final class OverlapResizer {
 
                 let newHeight = max(80, cocoa.height - intersection.height)
                 guard abs(newHeight - cocoa.height) > 1 else { continue }
-                guard let element = AXBridge.element(forWindowID: window.id, pid: window.pid) else { continue }
+                guard let element = WindowTracker.shared.axElement(for: window.id)
+                    ?? AXBridge.element(forWindowID: window.id, pid: window.pid) else { continue }
 
                 AXBridge.setSize(element, CGSize(width: cocoa.width, height: newHeight))
 
@@ -59,7 +60,8 @@ final class OverlapResizer {
     }
 
     private func verify(window: WindowInfo, bar: CGRect) {
-        guard let element = AXBridge.element(forWindowID: window.id, pid: window.pid),
+        guard let element = WindowTracker.shared.axElement(for: window.id)
+                ?? AXBridge.element(forWindowID: window.id, pid: window.pid),
               let frame = AXBridge.frame(of: element) else { return }
         let cocoa: CGRect
         if frame.origin.y < 0 || frame.maxY > ScreenGeometry.cocoaPrimaryHeight * 1.5 {
