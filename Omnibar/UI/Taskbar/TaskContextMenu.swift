@@ -88,11 +88,6 @@ enum TaskContextMenu {
         hide.target = Target.shared
         menu.addItem(hide)
 
-        let dock = NSMenuItem(title: "Fully Hide Dock", action: #selector(Target.toggleDock), keyEquivalent: "")
-        dock.state = SettingsStore.shared.settings.fullyHideDock ? .on : .off
-        dock.target = Target.shared
-        menu.addItem(dock)
-
         let allScreens = NSMenuItem(title: "Show Windows From All Screens", action: #selector(Target.toggleAllScreens), keyEquivalent: "")
         allScreens.state = SettingsStore.shared.settings.showWindowsFromAllScreens ? .on : .off
         allScreens.target = Target.shared
@@ -122,10 +117,6 @@ enum TaskContextMenu {
                     settings.hiddenDisplayIDs.append(id)
                 }
             }
-        }
-
-        @objc func toggleDock() {
-            SettingsStore.shared.update { $0.fullyHideDock.toggle() }
         }
 
         @objc func toggleAllScreens() {

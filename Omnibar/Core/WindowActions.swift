@@ -19,6 +19,12 @@ enum WindowActions {
         }
     }
 
+    static func zoom(_ window: WindowInfo) {
+        if let element = element(for: window) {
+            AXBridge.pressZoomButton(element)
+        }
+    }
+
     static func hideApp(pid: pid_t) {
         NSRunningApplication(processIdentifier: pid)?.hide()
     }

@@ -174,6 +174,76 @@ final class DragReorderTests: XCTestCase {
         XCTAssertEqual(result.pins, ["com.apple.Safari"])
         XCTAssertEqual(result.windowKeys, [window.orderKey])
     }
+
+    @MainActor
+    func testTargetIndexDoesNotOscillateAfterSlotChange() {
+        let first = DragReorderController.targetIndex(
+            dragMidX: 250,
+            current: 1,
+            count: 4,
+            originX: 0,
+            tileWidth: 100
+        )
+        let second = DragReorderController.targetIndex(
+            dragMidX: 250,
+            current: 2,
+            count: 4,
+            originX: 0,
+            tileWidth: 100
+        )
+        XCTAssertEqual(first, 2)
+        XCTAssertEqual(second, 2)
+    }
+
+    @MainActor
+    func testTargetIndexHysteresisKeepsCurrentNearBoundary() {
+        XCTAssertEqual(
+            DragReorderController.targetIndex(
+                dragMidX: 204,
+                current: 1,
+                count: 4,
+                originX: 0,
+                tileWidth: 100,
+                hysteresis: 8
+            ),
+            1
+        )
+        XCTAssertEqual(
+            DragReorderController.targetIndex(
+                dragMidX: 96,
+                current: 1,
+                count: 4,
+                originX: 0,
+                tileWidth: 100,
+                hysteresis: 8
+            ),
+            1
+        )
+    }
+
+    @MainActor
+    func testTargetIndexClampsToEnds() {
+        XCTAssertEqual(
+            DragReorderController.targetIndex(
+                dragMidX: -50,
+                current: 0,
+                count: 4,
+                originX: 0,
+                tileWidth: 100
+            ),
+            0
+        )
+        XCTAssertEqual(
+            DragReorderController.targetIndex(
+                dragMidX: 1000,
+                current: 0,
+                count: 4,
+                originX: 0,
+                tileWidth: 100
+            ),
+            3
+        )
+    }
 }
 
 final class AppCatalogGroupingTests: XCTestCase {

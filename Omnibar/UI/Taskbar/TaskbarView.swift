@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import QuartzCore
 
 final class TaskbarView: NSView {
     var onStartLeftClick: (() -> Void)?
@@ -9,6 +10,8 @@ final class TaskbarView: NSView {
     var onItemHover: ((TaskItem) -> Void)?
     var onItemHoverEnd: (() -> Void)?
     var onReorder: (([TaskItem]) -> Void)?
+
+    var isDragging: Bool { draggingView != nil }
 
     private let startButton = StartButtonView()
     private var itemViews: [TaskItemView] = []
@@ -28,10 +31,9 @@ final class TaskbarView: NSView {
 
     func update(items: [TaskItem], settings: AppSettings) {
         self.settings = settings
-        if draggingView == nil {
-            self.items = items
-            syncViews()
-        }
+        if draggingView != nil { return }
+        self.items = items
+        syncViews()
         needsLayout = true
     }
 
@@ -48,7 +50,9 @@ final class TaskbarView: NSView {
         let height = bounds.height
         let startWidth = max(height, 36)
         startButton.frame = CGRect(x: 4, y: 0, width: startWidth, height: height)
-        layoutItems()
+        if draggingView == nil {
+            layoutItems()
+        }
     }
 
     override func resetCursorRects() {
@@ -84,25 +88,52 @@ final class TaskbarView: NSView {
         view.onDragEnded = { [weak self] itemView, event in self?.endDrag(itemView, event: event) }
     }
 
-    private func layoutItems() {
-        let startWidth = startButton.frame.maxX + 4
-        let available = max(0, bounds.width - startWidth - 8)
+    private func slotMetrics() -> (originX: CGFloat, tileWidth: CGFloat) {
+        let originX = startButton.frame.maxX + 4
+        let available = max(0, bounds.width - originX - 8)
         let count = max(1, itemViews.count)
-        let maxTile: CGFloat = settings.iconOnly ? bounds.height + 8 : 220
-        let minTile: CGFloat = settings.iconOnly ? bounds.height : 72
+        let maxTile: CGFloat = settings.compactItems ? bounds.height + 8 : 220
+        let minTile: CGFloat = settings.compactItems ? bounds.height : 72
         var tileWidth = min(maxTile, max(minTile, available / CGFloat(count)))
         if CGFloat(itemViews.count) * tileWidth > available, itemViews.count > 0 {
             tileWidth = max(bounds.height, available / CGFloat(itemViews.count))
         }
-        var x = startWidth
-        for view in itemViews {
-            if view === draggingView {
-                let pointer = convert(window?.mouseLocationOutsideOfEventStream ?? .zero, from: nil)
-                view.frame = CGRect(x: pointer.x - dragOffset, y: 2, width: tileWidth, height: bounds.height - 4)
-            } else {
-                view.frame = CGRect(x: x, y: 2, width: tileWidth, height: bounds.height - 4)
+        return (originX, floor(tileWidth))
+    }
+
+    private func layoutItems(animateSiblings: Bool = false) {
+        let (originX, tileWidth) = slotMetrics()
+        let height = bounds.height - 4
+        if let view = draggingView {
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            view.frame.size = CGSize(width: tileWidth, height: height)
+            view.frame.origin.y = 2
+            CATransaction.commit()
+        }
+        let frames: [(TaskItemView, CGRect)] = itemViews.enumerated().compactMap { index, view in
+            guard view !== draggingView else { return nil }
+            let frame = CGRect(
+                x: originX + CGFloat(index) * tileWidth,
+                y: 2,
+                width: tileWidth,
+                height: height
+            )
+            return (view, frame)
+        }
+        if animateSiblings {
+            NSAnimationContext.runAnimationGroup { ctx in
+                ctx.duration = 0.12
+                ctx.allowsImplicitAnimation = true
+                ctx.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                for (view, frame) in frames {
+                    view.animator().frame = frame
+                }
             }
-            x += tileWidth
+        } else {
+            for (view, frame) in frames {
+                view.frame = frame
+            }
         }
     }
 
@@ -117,25 +148,31 @@ final class TaskbarView: NSView {
     private func drag(_ view: TaskItemView, event: NSEvent) {
         guard draggingView === view else { return }
         let local = convert(event.locationInWindow, from: nil)
-        view.frame.origin.x = local.x - dragOffset
-        if let from = itemViews.firstIndex(where: { $0 === view }) {
-            let mid = view.frame.midX
-            var target = from
-            for (index, other) in itemViews.enumerated() where other !== view {
-                if mid < other.frame.midX {
-                    target = index
-                    break
-                }
-                target = index
-            }
-            if target != from {
-                let item = items.remove(at: from)
-                items.insert(item, at: target)
-                itemViews.remove(at: from)
-                itemViews.insert(view, at: target)
-            }
+        let (originX, tileWidth) = slotMetrics()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        view.frame = CGRect(
+            x: local.x - dragOffset,
+            y: 2,
+            width: tileWidth,
+            height: bounds.height - 4
+        )
+        CATransaction.commit()
+        guard let from = itemViews.firstIndex(where: { $0 === view }) else { return }
+        let target = DragReorderController.targetIndex(
+            dragMidX: view.frame.midX,
+            current: from,
+            count: itemViews.count,
+            originX: originX,
+            tileWidth: tileWidth
+        )
+        if target != from {
+            let item = items.remove(at: from)
+            items.insert(item, at: target)
+            itemViews.remove(at: from)
+            itemViews.insert(view, at: target)
+            layoutItems(animateSiblings: true)
         }
-        layoutItems()
     }
 
     private func endDrag(_ view: TaskItemView, event: NSEvent) {

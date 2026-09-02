@@ -48,6 +48,8 @@ struct AppSettings: Codable, Equatable, Sendable {
 
     var appearanceIsDarkForced: Bool { !followSystemAppearance && forceDarkMode }
 
+    var compactItems: Bool { iconOnly || groupByApplication }
+
     func isDisplayHidden(_ displayID: UInt32) -> Bool {
         hiddenDisplayIDs.contains(displayID)
     }

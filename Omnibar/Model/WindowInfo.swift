@@ -24,13 +24,6 @@ struct WindowInfo: Equatable, Hashable, Identifiable, Sendable {
         title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? appName : title
     }
 
-    var indicatedTitle: String {
-        if isMinimized || isHidden {
-            return "[\(displayTitle)]"
-        }
-        return displayTitle
-    }
-
     func belongs(toSpace space: UInt64?) -> Bool {
         guard let space, !spaces.isEmpty else { return true }
         return spaces.contains(space)

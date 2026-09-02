@@ -60,7 +60,9 @@ final class TaskbarPanel: NSPanel {
         let items = snapshot.items(for: screenID)
         taskbarView.update(items: items, settings: SettingsStore.shared.settings)
         applyAppearance()
-        layoutBar()
+        if !taskbarView.isDragging {
+            layoutBar()
+        }
     }
 
     func setSuppressed(_ suppressed: Bool) {
@@ -227,10 +229,10 @@ final class TaskbarPanel: NSPanel {
     }
 
     private func showThumbnail(for item: TaskItem) {
-        guard let window = item.primaryWindow else { return }
+        guard !item.windows.isEmpty else { return }
         guard let view = taskbarView.view(forItemID: item.id) else { return }
         let rect = convertToScreen(view.frame)
-        thumbnail.present(window: window, item: item, anchor: rect)
+        thumbnail.present(item: item, anchor: rect)
     }
 
     private func commitReorder(_ items: [TaskItem]) {

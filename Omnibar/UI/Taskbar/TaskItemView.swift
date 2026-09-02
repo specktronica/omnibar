@@ -14,6 +14,7 @@ final class TaskItemView: NSView {
     private let iconView = NSImageView()
     private let badgeView = BadgeView()
     private let titleView = NSTextField(labelWithString: "")
+    private let dotsView = WindowDotsView()
     private var hovered = false
     private var mouseDownEvent: NSEvent?
     private var dragging = false
@@ -41,6 +42,7 @@ final class TaskItemView: NSView {
         titleView.isSelectable = false
         addSubview(iconView)
         addSubview(titleView)
+        addSubview(dotsView)
         addSubview(badgeView)
         refresh()
     }
@@ -116,17 +118,46 @@ final class TaskItemView: NSView {
 
     override func layout() {
         super.layout()
-        let icon = max(16, min(bounds.height - 10, 28))
         let padding: CGFloat = 8
-        iconView.frame = CGRect(x: padding, y: (bounds.height - icon) / 2, width: icon, height: icon)
-        badgeView.frame = CGRect(x: iconView.frame.maxX - 8, y: iconView.frame.maxY - 8, width: 14, height: 14)
-        if settings.iconOnly || item.isPinnedLauncher {
+        let showDots = dotsView.count > 0
+        let compact = settings.compactItems || item.isPinnedLauncher
+        if compact {
             titleView.isHidden = true
+            let gap: CGFloat = 2
+            let band = showDots ? WindowDotsView.bandHeight : 0
+            let maxIcon = bounds.height - 10
+            var icon = max(16, min(maxIcon, 28))
+            if showDots, icon + gap + band > maxIcon {
+                icon = max(16, maxIcon - gap - band)
+            }
+            let stackHeight = icon + (showDots ? gap + band : 0)
+            let stackY = (bounds.height - stackHeight) / 2
+            iconView.frame = CGRect(
+                x: (bounds.width - icon) / 2,
+                y: stackY + (showDots ? gap + band : 0),
+                width: icon,
+                height: icon
+            )
+            if showDots {
+                dotsView.isHidden = false
+                dotsView.frame = CGRect(
+                    x: iconView.frame.minX,
+                    y: stackY,
+                    width: icon,
+                    height: band
+                )
+            } else {
+                dotsView.isHidden = true
+            }
         } else {
             titleView.isHidden = false
+            dotsView.isHidden = true
+            let icon = max(16, min(bounds.height - 10, 28))
+            iconView.frame = CGRect(x: padding, y: (bounds.height - icon) / 2, width: icon, height: icon)
             let x = iconView.frame.maxX + 6
             titleView.frame = CGRect(x: x, y: 0, width: max(0, bounds.width - x - padding), height: bounds.height)
         }
+        badgeView.frame = CGRect(x: iconView.frame.maxX - 8, y: iconView.frame.maxY - 8, width: 14, height: 14)
         badgeView.isHidden = item.badge == nil
     }
 
@@ -146,6 +177,11 @@ final class TaskItemView: NSView {
     private func refresh() {
         iconView.image = icon()
         badgeView.text = item.badge
+        if settings.groupByApplication, case .grouped = item.kind {
+            dotsView.count = item.windows.count
+        } else {
+            dotsView.count = 0
+        }
         let fontSize = CGFloat(settings.fontSize)
         let base = NSFont.systemFont(ofSize: fontSize)
         let bold = NSFont.boldSystemFont(ofSize: fontSize)
@@ -219,10 +255,7 @@ final class TaskItemView: NSView {
         secondary: NSColor,
         paragraph: NSParagraphStyle
     ) -> NSAttributedString {
-        let displayName = settings.indicateMinimizedHidden && item.isMinimizedOrHidden
-            ? "[\(name)]"
-            : name
-        let result = NSMutableAttributedString(string: displayName, attributes: [
+        let result = NSMutableAttributedString(string: name, attributes: [
             .font: font,
             .foregroundColor: color,
             .paragraphStyle: paragraph
@@ -249,6 +282,38 @@ private final class VerticallyCenteredTextFieldCell: NSTextFieldCell {
         let textSize = cellSize(forBounds: rect)
         let dy = (proposed.height - textSize.height) / 2
         return NSRect(x: proposed.origin.x, y: proposed.origin.y + dy, width: proposed.width, height: textSize.height)
+    }
+}
+
+private final class WindowDotsView: NSView {
+    static let diameter: CGFloat = 4
+    static let gap: CGFloat = 3
+    static let bandHeight: CGFloat = 6
+
+    var count: Int = 0 {
+        didSet {
+            if count != oldValue {
+                needsDisplay = true
+                isHidden = count == 0
+            }
+        }
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let shown = min(count, 3)
+        guard shown > 0 else { return }
+        let diameter = Self.diameter
+        let gap = Self.gap
+        let total = CGFloat(shown) * diameter + CGFloat(shown - 1) * gap
+        var x = (bounds.width - total) / 2
+        let y = (bounds.height - diameter) / 2
+        NSColor.systemBlue.setFill()
+        for _ in 0..<shown {
+            NSBezierPath(ovalIn: CGRect(x: x, y: y, width: diameter, height: diameter)).fill()
+            x += diameter + gap
+        }
     }
 }
 
