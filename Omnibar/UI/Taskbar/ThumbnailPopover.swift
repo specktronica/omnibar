@@ -17,6 +17,8 @@ final class ThumbnailPopover: NSPanel {
     private var offset = 0
     private var thumbnailSize: CGFloat = 240
     private var refreshTask: Task<Void, Never>?
+    private var hoverFocusWork: DispatchWorkItem?
+    private var hoverFocusedWindowID: CGWindowID?
 
     private var visibleCount: Int { min(Self.maxVisibleCards, windows.count) }
 
@@ -44,6 +46,9 @@ final class ThumbnailPopover: NSPanel {
         contentView = effect
         for card in cards {
             effect.addSubview(card)
+            card.onHover = { [weak self] window in
+                self?.focusHoveredPreview(window)
+            }
             card.onRaise = { [weak self] window in
                 WindowActions.raise(window)
                 self?.dismiss()
@@ -75,6 +80,9 @@ final class ThumbnailPopover: NSPanel {
 
     func present(item: TaskItem, anchor: NSRect) {
         guard !item.windows.isEmpty else { return }
+        hoverFocusWork?.cancel()
+        hoverFocusWork = nil
+        hoverFocusedWindowID = item.windows.first(where: \.isActive)?.id
         self.item = item
         windows = item.windows
         let visible = visibleCount
@@ -116,6 +124,9 @@ final class ThumbnailPopover: NSPanel {
     }
 
     func dismiss() {
+        hoverFocusWork?.cancel()
+        hoverFocusWork = nil
+        hoverFocusedWindowID = nil
         refreshTask?.cancel()
         refreshTask = nil
         isHovered = false
@@ -137,10 +148,25 @@ final class ThumbnailPopover: NSPanel {
         dismiss()
     }
 
+    private func focusHoveredPreview(_ window: WindowInfo) {
+        guard window.id != hoverFocusedWindowID else { return }
+        hoverFocusWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self, self.isVisible else { return }
+            WindowActions.raise(window)
+            self.hoverFocusedWindowID = window.id
+            self.orderFrontRegardless()
+        }
+        hoverFocusWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12, execute: work)
+    }
+
     private func page(by delta: Int) {
         let maxOffset = max(0, windows.count - visibleCount)
         let next = min(max(0, offset + delta), maxOffset)
         guard next != offset else { return }
+        hoverFocusWork?.cancel()
+        hoverFocusWork = nil
         offset = next
         layoutCards()
         startRefresh()

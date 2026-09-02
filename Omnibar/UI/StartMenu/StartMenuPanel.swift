@@ -5,6 +5,7 @@ final class StartMenuPanel: NSPanel {
     private let effect = NSVisualEffectView()
     private let searchField = SearchField()
     private let appList = AppListView()
+    private let columnDivider = ColumnDivider()
     private let pinnedGrid = PinnedGridView()
     private let recents = RecentAppsView()
     private var localMonitor: Any?
@@ -41,6 +42,7 @@ final class StartMenuPanel: NSPanel {
         searchField.action = #selector(searchChanged)
         effect.addSubview(searchField)
         effect.addSubview(appList)
+        effect.addSubview(columnDivider)
         effect.addSubview(pinnedGrid)
         effect.addSubview(recents)
 
@@ -116,16 +118,19 @@ final class StartMenuPanel: NSPanel {
     private func layoutContent() {
         let bounds = effect.bounds
         let padding: CGFloat = 16
-        let leftWidth = bounds.width * 0.55
-        searchField.frame = NSRect(x: padding, y: bounds.height - 44, width: leftWidth - padding * 1.5, height: 28)
+        let gutter: CGFloat = 12
+        let dividerX = bounds.width * 0.55
+        let leftWidth = max(dividerX - padding - gutter, 0)
+        searchField.frame = NSRect(x: padding, y: bounds.height - 44, width: leftWidth, height: 28)
         appList.frame = NSRect(
             x: padding,
             y: padding,
-            width: leftWidth - padding * 1.5,
+            width: leftWidth,
             height: bounds.height - 60
         )
-        let rightX = leftWidth
-        let rightW = bounds.width - rightX - padding
+        columnDivider.frame = NSRect(x: dividerX, y: 0, width: 1, height: bounds.height)
+        let rightX = dividerX + gutter
+        let rightW = max(bounds.width - rightX - padding, 0)
         pinnedGrid.frame = NSRect(x: rightX, y: bounds.height / 2, width: rightW, height: bounds.height / 2 - padding)
         recents.frame = NSRect(x: rightX, y: padding, width: rightW, height: bounds.height / 2 - padding)
     }
@@ -199,5 +204,14 @@ final class StartMenuPanel: NSPanel {
         up?.flags = .maskCommand
         down?.post(tap: .cghidEventTap)
         up?.post(tap: .cghidEventTap)
+    }
+}
+
+private final class ColumnDivider: NSView {
+    override var isOpaque: Bool { false }
+
+    override func draw(_ dirtyRect: NSRect) {
+        NSColor.separatorColor.withAlphaComponent(0.45).setFill()
+        bounds.fill()
     }
 }

@@ -4,9 +4,10 @@ final class StatusItemController {
     private var item: NSStatusItem?
 
     func setup() {
-        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         if let button = item.button {
-            button.image = NSImage(systemSymbolName: "rectangle.split.1x2", accessibilityDescription: "Omnibar")
+            button.image = BrandIcon.image(pointSize: 18)
+            button.image?.accessibilityDescription = "Omnibar"
             button.toolTip = "Omnibar"
         }
         item.menu = buildMenu()

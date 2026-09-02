@@ -5,6 +5,7 @@ final class ThumbnailCardView: NSView {
     static let chromeHeight: CGFloat = 28
     static let contentInset: CGFloat = 8
 
+    var onHover: ((WindowInfo) -> Void)?
     var onRaise: ((WindowInfo) -> Void)?
     var onClose: ((WindowInfo) -> Void)?
     var onMinimize: ((WindowInfo) -> Void)?
@@ -59,6 +60,24 @@ final class ThumbnailCardView: NSView {
     required init?(coder: NSCoder) { nil }
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        trackingAreas.forEach(removeTrackingArea)
+        addTrackingArea(NSTrackingArea(
+            rect: bounds,
+            options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+            owner: self,
+            userInfo: nil
+        ))
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        if let windowInfo {
+            onHover?(windowInfo)
+        }
+        _ = event
+    }
 
     override func mouseDown(with event: NSEvent) {
         if let windowInfo {

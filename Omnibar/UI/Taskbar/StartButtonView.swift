@@ -5,13 +5,37 @@ final class StartButtonView: NSView {
     var onLeftClick: (() -> Void)?
     var onRightClick: ((NSEvent) -> Void)?
     private var hovered = false
+    private let iconView = NSImageView()
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         wantsLayer = true
+        iconView.image = BrandIcon.image(pointSize: 32)
+        iconView.imageScaling = .scaleProportionallyUpOrDown
+        iconView.wantsLayer = true
+        iconView.layer?.cornerCurve = .continuous
+        iconView.layer?.masksToBounds = true
+        addSubview(iconView)
     }
 
     required init?(coder: NSCoder) { nil }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        bounds.contains(point) ? self : nil
+    }
+
+    override func layout() {
+        super.layout()
+        let pad: CGFloat = 6
+        let side = min(bounds.width, bounds.height) - pad * 2
+        iconView.frame = CGRect(
+            x: (bounds.width - side) / 2,
+            y: (bounds.height - side) / 2,
+            width: side,
+            height: side
+        )
+        iconView.layer?.cornerRadius = max(4, side * 0.22)
+    }
 
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
@@ -48,31 +72,9 @@ final class StartButtonView: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        let pad: CGFloat = 4
         if hovered {
             NSColor.labelColor.withAlphaComponent(0.12).setFill()
             NSBezierPath(roundedRect: bounds.insetBy(dx: 2, dy: 3), xRadius: 6, yRadius: 6).fill()
-        }
-        let grid = bounds.insetBy(dx: pad + 3, dy: pad + 3)
-        let gap: CGFloat = 2
-        let cell = min((grid.width - gap) / 2, (grid.height - gap) / 2)
-        let colors: [NSColor] = [
-            NSColor(srgbRed: 0.20, green: 0.48, blue: 0.96, alpha: 1),
-            NSColor(srgbRed: 0.20, green: 0.78, blue: 0.35, alpha: 1),
-            NSColor(srgbRed: 1.00, green: 0.80, blue: 0.00, alpha: 1),
-            NSColor(srgbRed: 1.00, green: 0.27, blue: 0.23, alpha: 1)
-        ]
-        let originX = grid.midX - cell - gap / 2
-        let originY = grid.midY - cell - gap / 2
-        let positions = [
-            CGPoint(x: originX, y: originY + cell + gap),
-            CGPoint(x: originX + cell + gap, y: originY + cell + gap),
-            CGPoint(x: originX, y: originY),
-            CGPoint(x: originX + cell + gap, y: originY)
-        ]
-        for (color, point) in zip(colors, positions) {
-            color.setFill()
-            NSBezierPath(roundedRect: CGRect(origin: point, size: CGSize(width: cell, height: cell)), xRadius: 2, yRadius: 2).fill()
         }
     }
 }
