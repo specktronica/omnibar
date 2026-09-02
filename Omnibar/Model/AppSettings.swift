@@ -23,7 +23,7 @@ struct AppSettings: Codable, Equatable, Sendable {
     var taskbarHeight: Double = 40
     var fontSize: Double = 12
     var iconOnly: Bool = false
-    var groupByApplication: Bool = false
+    var groupByApplication: Bool = true
     var showTabsAsItems: Bool = true
     var indicateMinimizedHidden: Bool = true
     var hideOnClickInsteadOfMinimize: Bool = false
@@ -39,7 +39,7 @@ struct AppSettings: Codable, Equatable, Sendable {
     var allowDragReorder: Bool = true
     var autoHide: Bool = false
     var pollInterval: Double = 1.5
-    var fullyHideDock: Bool = false
+    var fullyHideDock: Bool = true
     var launchAtLogin: Bool = false
     var startButtonAction: StartButtonAction = .startMenu
     var recentAppsLimit: Int = 10

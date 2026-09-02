@@ -41,6 +41,68 @@ struct SettingsRootView: View {
         }
         .padding(16)
         .frame(minWidth: 600, minHeight: 460)
+        // Native NSSwitch uses controlAccentColor, which AppKit draws as
+        // graphite when this accessory app's window is not key.
+        .toggleStyle(PersistentSwitchToggleStyle())
+        .environment(\.controlActiveState, .key)
+    }
+}
+
+/// Switch that keeps the system accent while the settings window is inactive.
+private struct PersistentSwitchToggleStyle: ToggleStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        LabeledContent {
+            PersistentSwitch(isOn: configuration.$isOn)
+        } label: {
+            configuration.label
+        }
+    }
+}
+
+private struct PersistentSwitch: View {
+    @Binding var isOn: Bool
+    @Environment(\.isEnabled) private var isEnabled
+
+    var body: some View {
+        Button {
+            isOn.toggle()
+        } label: {
+            ZStack(alignment: isOn ? .trailing : .leading) {
+                Capsule()
+                    .fill(isOn ? PersistentAccent.color : Color.primary.opacity(0.18))
+                Circle()
+                    .fill(Color.white)
+                    .shadow(color: .black.opacity(0.2), radius: 0.5, y: 1)
+                    .padding(2)
+            }
+            .frame(width: 38, height: 22)
+            .animation(.easeInOut(duration: 0.12), value: isOn)
+        }
+        .buttonStyle(.plain)
+        .disabled(!isEnabled)
+        .opacity(isEnabled ? 1 : 0.45)
+        .accessibilityAddTraits(.isToggle)
+        .accessibilityValue(isOn ? "On" : "Off")
+    }
+}
+
+private enum PersistentAccent {
+    static var color: Color { Color(nsColor: nsColor) }
+
+    /// `controlAccentColor` is grayed when the window is inactive. Map the
+    /// user's accent preference to a system color that does not desaturate.
+    static var nsColor: NSColor {
+        switch UserDefaults.standard.object(forKey: "AppleAccentColor") as? Int {
+        case -1: .systemGray
+        case 0: .systemRed
+        case 1: .systemOrange
+        case 2: .systemYellow
+        case 3: .systemGreen
+        case 4: .systemBlue
+        case 5: .systemPurple
+        case 6: .systemPink
+        default: .systemBlue
+        }
     }
 }
 

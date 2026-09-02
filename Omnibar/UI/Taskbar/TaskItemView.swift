@@ -26,8 +26,18 @@ final class TaskItemView: NSView {
         wantsLayer = true
         layer?.cornerRadius = 8
         iconView.imageScaling = .scaleProportionallyUpOrDown
+        let cell = VerticallyCenteredTextFieldCell(textCell: "")
+        cell.isEditable = false
+        cell.isSelectable = false
+        cell.isBezeled = false
+        cell.drawsBackground = false
+        cell.lineBreakMode = .byTruncatingTail
+        cell.usesSingleLineMode = true
+        cell.truncatesLastVisibleLine = true
+        titleView.cell = cell
         titleView.lineBreakMode = .byTruncatingTail
         titleView.maximumNumberOfLines = 1
+        titleView.usesSingleLineMode = true
         titleView.isSelectable = false
         addSubview(iconView)
         addSubview(titleView)
@@ -139,8 +149,10 @@ final class TaskItemView: NSView {
         let fontSize = CGFloat(settings.fontSize)
         let base = NSFont.systemFont(ofSize: fontSize)
         let bold = NSFont.boldSystemFont(ofSize: fontSize)
-        titleView.attributedStringValue = attributedTitle(base: base, bold: bold)
+        let title = attributedTitle(base: base, bold: bold)
+        titleView.attributedStringValue = title
         titleView.font = item.isActive ? bold : base
+        titleView.toolTip = title.string
     }
 
     private func icon() -> NSImage? {
@@ -156,41 +168,87 @@ final class TaskItemView: NSView {
 
     private func attributedTitle(base: NSFont, bold: NSFont) -> NSAttributedString {
         let color = NSColor.labelColor
+        let secondary = NSColor.secondaryLabelColor
+        let font = item.isActive ? bold : base
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.lineBreakMode = .byTruncatingTail
         switch item.kind {
         case .window(let window):
-            return Self.windowTitle(window, settings: settings, base: base, bold: bold, color: color)
+            return label(
+                name: window.appName,
+                description: windowTitle(window),
+                font: font,
+                base: base,
+                color: color,
+                secondary: secondary,
+                paragraph: paragraph
+            )
         case .grouped(_, let appName, let windows, _):
             let extra = windows.count > 1 ? " (\(windows.count))" : ""
-            return NSAttributedString(string: appName + extra, attributes: [
-                .font: item.isActive ? bold : base,
-                .foregroundColor: color
-            ])
+            let primary = windows.first(where: \.isActive) ?? windows.first
+            return label(
+                name: appName + extra,
+                description: primary.flatMap(windowTitle),
+                font: font,
+                base: base,
+                color: color,
+                secondary: secondary,
+                paragraph: paragraph
+            )
         case .pinned(_, let name, _, _):
-            return NSAttributedString(string: name, attributes: [.font: base, .foregroundColor: color])
+            return NSAttributedString(string: name, attributes: [
+                .font: base,
+                .foregroundColor: color,
+                .paragraphStyle: paragraph
+            ])
         }
     }
 
-    static func windowTitle(
-        _ window: WindowInfo,
-        settings: AppSettings,
+    private func windowTitle(_ window: WindowInfo) -> String? {
+        let title = window.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty, title != window.appName else { return nil }
+        return title
+    }
+
+    private func label(
+        name: String,
+        description: String?,
+        font: NSFont,
         base: NSFont,
-        bold: NSFont,
-        color: NSColor
+        color: NSColor,
+        secondary: NSColor,
+        paragraph: NSParagraphStyle
     ) -> NSAttributedString {
-        let title = settings.indicateMinimizedHidden ? window.indicatedTitle : window.displayTitle
-        let result = NSMutableAttributedString()
-        result.append(NSAttributedString(string: title, attributes: [
-            .font: window.isActive ? bold : base,
-            .foregroundColor: color
-        ]))
-        if window.displayTitle != window.appName {
-            result.append(NSAttributedString(string: " - ", attributes: [.font: base, .foregroundColor: color]))
-            result.append(NSAttributedString(string: window.appName, attributes: [
-                .font: bold,
-                .foregroundColor: color
+        let displayName = settings.indicateMinimizedHidden && item.isMinimizedOrHidden
+            ? "[\(name)]"
+            : name
+        let result = NSMutableAttributedString(string: displayName, attributes: [
+            .font: font,
+            .foregroundColor: color,
+            .paragraphStyle: paragraph
+        ])
+        if let description {
+            result.append(NSAttributedString(string: " - ", attributes: [
+                .font: base,
+                .foregroundColor: secondary,
+                .paragraphStyle: paragraph
+            ]))
+            result.append(NSAttributedString(string: description, attributes: [
+                .font: base,
+                .foregroundColor: secondary,
+                .paragraphStyle: paragraph
             ]))
         }
         return result
+    }
+}
+
+private final class VerticallyCenteredTextFieldCell: NSTextFieldCell {
+    override func drawingRect(forBounds rect: NSRect) -> NSRect {
+        let proposed = super.drawingRect(forBounds: rect)
+        let textSize = cellSize(forBounds: rect)
+        let dy = (proposed.height - textSize.height) / 2
+        return NSRect(x: proposed.origin.x, y: proposed.origin.y + dy, width: proposed.width, height: textSize.height)
     }
 }
 

@@ -21,7 +21,7 @@ enum OnboardingWindow {
             let window = NSWindow(contentViewController: hosting)
             window.title = "Omnibar"
             window.styleMask = [.titled, .closable]
-            window.setContentSize(NSSize(width: 460, height: 360))
+            window.setContentSize(NSSize(width: 460, height: 430))
             window.center()
             window.isReleasedWhenClosed = false
             window.hidesOnDeactivate = false
@@ -124,6 +124,7 @@ private final class OnboardingWindowDelegate: NSObject, NSWindowDelegate {
 
 struct PermissionsView: View {
     private let permissions = PermissionsManager.shared
+    @Bindable private var store = SettingsStore.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -147,6 +148,21 @@ struct PermissionsView: View {
             ) {
                 _ = PermissionsManager.shared.promptScreenRecording()
             }
+            HStack(alignment: .top) {
+                Image(systemName: store.settings.fullyHideDock ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(store.settings.fullyHideDock ? .green : .secondary)
+                    .font(.title3)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Hide the macOS Dock").font(.headline)
+                    Text("Keeps the system Dock fully hidden while Omnibar is running so the two bars do not overlap. The Dock is restored when you quit.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Toggle("Hide the macOS Dock", isOn: $store.settings.fullyHideDock)
+                    .toggleStyle(.switch)
+                    .labelsHidden()
+            }
             Spacer()
             HStack {
                 Spacer()
@@ -158,7 +174,7 @@ struct PermissionsView: View {
             }
         }
         .padding(24)
-        .frame(width: 460, height: 340)
+        .frame(width: 460, height: 410)
         .onAppear {
             PermissionsManager.shared.refresh()
         }

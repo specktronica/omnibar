@@ -62,6 +62,16 @@ final class SettingsTests: XCTestCase {
         XCTAssertTrue(settings.isDisplayHidden(42))
         XCTAssertFalse(settings.isDisplayHidden(1))
     }
+
+    @MainActor
+    func testGroupByApplicationDefaultsOn() {
+        XCTAssertTrue(AppSettings.default.groupByApplication)
+    }
+
+    @MainActor
+    func testFullyHideDockDefaultsOn() {
+        XCTAssertTrue(AppSettings.default.fullyHideDock)
+    }
 }
 
 final class TaskListLogicTests: XCTestCase {
@@ -176,7 +186,82 @@ final class AppCatalogGroupingTests: XCTestCase {
         ]
         let grouped = AppCatalog.shared.groupedByLetter(apps)
         XCTAssertEqual(grouped.map(\.letter), ["#", "A", "B"])
+        XCTAssertEqual(grouped.first { $0.letter == "A" }?.apps.map(\.name), ["Arcade"])
+        XCTAssertEqual(grouped.first { $0.letter == "#" }?.apps.map(\.name), ["1Password"])
     }
+
+    @MainActor
+    func testEmptyListHasNoGroups() {
+        XCTAssertTrue(AppCatalog.shared.groupedByLetter([]).isEmpty)
+    }
+}
+
+final class AppCatalogScanTests: XCTestCase {
+    @MainActor
+    func testCollectsAppsFromDirectoryAndNestedFolder() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("omnibar-catalog-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        try makeStubApp(named: "Arcade", bundleID: "io.specktronica.arcade", in: root)
+        let nested = root.appendingPathComponent("Utilities")
+        try FileManager.default.createDirectory(at: nested, withIntermediateDirectories: true)
+        try makeStubApp(named: "Books", bundleID: "io.specktronica.books", in: nested)
+
+        let apps = AppCatalog.shared.collectApps(from: [root])
+        XCTAssertEqual(apps.map(\.name), ["Arcade", "Books"])
+        XCTAssertEqual(apps.map(\.bundleID), ["io.specktronica.arcade", "io.specktronica.books"])
+    }
+
+    @MainActor
+    func testReadsBundleIdentifierFromInfoPlist() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("omnibar-plist-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let appURL = try makeStubApp(named: "Zebra Test", bundleID: "io.specktronica.zebratest", in: root)
+        let app = AppCatalog.shared.catalogApp(from: appURL)
+        XCTAssertEqual(app?.bundleID, "io.specktronica.zebratest")
+        XCTAssertEqual(app?.name, "Zebra Test")
+    }
+}
+
+final class AppListViewTests: XCTestCase {
+    @MainActor
+    func testRendersLetterHeadersAndRows() {
+        let view = AppListView(frame: NSRect(x: 0, y: 0, width: 300, height: 200))
+        let apps = [
+            AppCatalog.CatalogApp(bundleID: "a", name: "Arcade", url: URL(fileURLWithPath: "/tmp/Arcade.app")),
+            AppCatalog.CatalogApp(bundleID: "b", name: "Books", url: URL(fileURLWithPath: "/tmp/Books.app"))
+        ]
+        view.update(AppCatalog.shared.groupedByLetter(apps))
+        view.layoutSubtreeIfNeeded()
+
+        let document = view.documentView
+        XCTAssertEqual(document?.subviews.count, 4)
+        XCTAssertGreaterThan(document?.frame.height ?? 0, 80)
+        XCTAssertEqual(
+            document?.subviews.compactMap { $0 as? NSTextField }.map(\.stringValue),
+            ["A", "B"]
+        )
+    }
+}
+
+@MainActor
+@discardableResult
+private func makeStubApp(named name: String, bundleID: String, in directory: URL) throws -> URL {
+    let app = directory.appendingPathComponent("\(name).app")
+    let contents = app.appendingPathComponent("Contents")
+    try FileManager.default.createDirectory(at: contents, withIntermediateDirectories: true)
+    let plist: [String: Any] = [
+        "CFBundleIdentifier": bundleID,
+        "CFBundleName": name,
+        "CFBundlePackageType": "APPL",
+        "CFBundleExecutable": name
+    ]
+    let data = try PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0)
+    try data.write(to: contents.appendingPathComponent("Info.plist"))
+    return app
 }
 
 final class ScanCoalescerTests: XCTestCase {

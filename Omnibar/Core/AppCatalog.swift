@@ -46,20 +46,25 @@ final class AppCatalog {
         workspaceTokens.removeAll()
     }
 
+    static let defaultDirectories: [URL] = [
+        URL(fileURLWithPath: "/Applications"),
+        URL(fileURLWithPath: "/System/Applications"),
+        URL(fileURLWithPath: "/System/Applications/Utilities"),
+        FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Applications")
+    ]
+
     func refresh() {
-        let directories = [
-            URL(fileURLWithPath: "/Applications"),
-            URL(fileURLWithPath: "/System/Applications"),
-            URL(fileURLWithPath: "/System/Applications/Utilities"),
-            FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Applications")
-        ]
+        apps = collectApps(from: Self.defaultDirectories)
+        NotificationCenter.default.post(name: .omnibarCatalogDidChange, object: nil)
+    }
+
+    func collectApps(from directories: [URL]) -> [CatalogApp] {
         var found: [CatalogApp] = []
         var seen = Set<String>()
         for directory in directories {
             found.append(contentsOf: scan(directory: directory, seen: &seen))
         }
-        apps = found.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
-        NotificationCenter.default.post(name: .omnibarCatalogDidChange, object: nil)
+        return found.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
     func recordLaunch(bundleID: String) {
@@ -115,28 +120,25 @@ final class AppCatalog {
         let fm = FileManager.default
         guard let contents = try? fm.contentsOfDirectory(
             at: directory,
-            includingPropertiesForKeys: [.isDirectoryKey],
+            includingPropertiesForKeys: [.isDirectoryKey, .isPackageKey],
             options: [.skipsHiddenFiles]
         ) else { return [] }
 
         var result: [CatalogApp] = []
         for url in contents {
-            if url.pathExtension == "app" {
+            if isAppBundle(url) {
                 if let app = catalogApp(from: url), seen.insert(app.bundleID).inserted {
                     result.append(app)
                 }
-            } else {
-                var isDir: ObjCBool = false
-                if fm.fileExists(atPath: url.path, isDirectory: &isDir), isDir.boolValue {
-                    let nested = (try? fm.contentsOfDirectory(
-                        at: url,
-                        includingPropertiesForKeys: nil,
-                        options: [.skipsHiddenFiles]
-                    )) ?? []
-                    for child in nested where child.pathExtension == "app" {
-                        if let app = catalogApp(from: child), seen.insert(app.bundleID).inserted {
-                            result.append(app)
-                        }
+            } else if isDirectory(url) {
+                let nested = (try? fm.contentsOfDirectory(
+                    at: url,
+                    includingPropertiesForKeys: [.isPackageKey],
+                    options: [.skipsHiddenFiles]
+                )) ?? []
+                for child in nested where isAppBundle(child) {
+                    if let app = catalogApp(from: child), seen.insert(app.bundleID).inserted {
+                        result.append(app)
                     }
                 }
             }
@@ -144,17 +146,63 @@ final class AppCatalog {
         return result
     }
 
-    private func catalogApp(from url: URL) -> CatalogApp? {
-        guard let bundle = Bundle(url: url), let id = bundle.bundleIdentifier else { return nil }
-        let name: String
-        if let display = bundle.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String, !display.isEmpty {
-            name = display
-        } else if let bundleName = bundle.object(forInfoDictionaryKey: "CFBundleName") as? String, !bundleName.isEmpty {
-            name = bundleName
-        } else {
-            name = url.deletingPathExtension().lastPathComponent
+    private func isAppBundle(_ url: URL) -> Bool {
+        url.pathExtension.lowercased() == "app"
+    }
+
+    private func isDirectory(_ url: URL) -> Bool {
+        if let values = try? url.resourceValues(forKeys: [.isDirectoryKey, .isPackageKey]) {
+            return values.isDirectory == true && values.isPackage != true
         }
-        return CatalogApp(bundleID: id, name: name, url: url)
+        var isDir: ObjCBool = false
+        return FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir) && isDir.boolValue && !isAppBundle(url)
+    }
+
+    func catalogApp(from url: URL) -> CatalogApp? {
+        let resolved = url.resolvingSymlinksInPath()
+        guard isAppBundle(resolved) else { return nil }
+        let info = infoDictionary(forAppAt: resolved)
+        let bundle = Bundle(url: resolved)
+        let bundleID = bundle?.bundleIdentifier
+            ?? (info?["CFBundleIdentifier"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+            ?? "app.\(resolved.path)"
+        let name = appName(from: info, bundle: bundle, url: resolved)
+        return CatalogApp(bundleID: bundleID, name: name, url: resolved)
+    }
+
+    private func infoDictionary(forAppAt url: URL) -> [String: Any]? {
+        let candidates = [
+            url.appendingPathComponent("Contents/Info.plist"),
+            url.appendingPathComponent("Wrapper/Info.plist")
+        ]
+        for plist in candidates {
+            if let info = NSDictionary(contentsOf: plist) as? [String: Any] {
+                return info
+            }
+        }
+        return Bundle(url: url)?.infoDictionary
+    }
+
+    private func appName(from info: [String: Any]?, bundle: Bundle?, url: URL) -> String {
+        if let bundle {
+            if let display = bundle.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String, !display.isEmpty {
+                return display
+            }
+            if let name = bundle.object(forInfoDictionaryKey: "CFBundleName") as? String, !name.isEmpty {
+                return name
+            }
+        }
+        if let display = info?["CFBundleDisplayName"] as? String, !display.isEmpty {
+            return display
+        }
+        if let name = info?["CFBundleName"] as? String, !name.isEmpty {
+            return name
+        }
+        let displayName = FileManager.default.displayName(atPath: url.path)
+        if displayName.hasSuffix(".app") {
+            return url.deletingPathExtension().lastPathComponent
+        }
+        return displayName.isEmpty ? url.deletingPathExtension().lastPathComponent : displayName
     }
 
     private func watch() {

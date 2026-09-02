@@ -23,7 +23,8 @@ final class ThumbnailPopover: NSPanel {
         hasShadow = true
         hidesOnDeactivate = false
         isFloatingPanel = true
-        level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.popUpMenuWindow)))
+        // Stay above the taskbar, but below NSMenu so the item context menu is not covered.
+        level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.popUpMenuWindow)) - 1)
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient]
         effect.material = .popover
         effect.blendingMode = .behindWindow
