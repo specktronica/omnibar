@@ -92,8 +92,8 @@ final class TaskbarView: NSView {
         let originX = startButton.frame.maxX + 4
         let available = max(0, bounds.width - originX - 8)
         let count = max(1, itemViews.count)
-        let maxTile: CGFloat = settings.compactItems ? bounds.height + 8 : 220
-        let minTile: CGFloat = settings.compactItems ? bounds.height : 72
+        let maxTile: CGFloat = settings.compactItems ? bounds.height + 16 : 220
+        let minTile: CGFloat = settings.compactItems ? bounds.height + 8 : 72
         var tileWidth = min(maxTile, max(minTile, available / CGFloat(count)))
         if CGFloat(itemViews.count) * tileWidth > available, itemViews.count > 0 {
             tileWidth = max(bounds.height, available / CGFloat(itemViews.count))
@@ -103,19 +103,21 @@ final class TaskbarView: NSView {
 
     private func layoutItems(animateSiblings: Bool = false) {
         let (originX, tileWidth) = slotMetrics()
-        let height = bounds.height - 4
+        let chrome: CGFloat = 2
+        let height = bounds.height - chrome
+        let originY = chrome / 2
         if let view = draggingView {
             CATransaction.begin()
             CATransaction.setDisableActions(true)
             view.frame.size = CGSize(width: tileWidth, height: height)
-            view.frame.origin.y = 2
+            view.frame.origin.y = originY
             CATransaction.commit()
         }
         let frames: [(TaskItemView, CGRect)] = itemViews.enumerated().compactMap { index, view in
             guard view !== draggingView else { return nil }
             let frame = CGRect(
                 x: originX + CGFloat(index) * tileWidth,
-                y: 2,
+                y: originY,
                 width: tileWidth,
                 height: height
             )
@@ -153,9 +155,9 @@ final class TaskbarView: NSView {
         CATransaction.setDisableActions(true)
         view.frame = CGRect(
             x: local.x - dragOffset,
-            y: 2,
+            y: 1,
             width: tileWidth,
-            height: bounds.height - 4
+            height: bounds.height - 2
         )
         CATransaction.commit()
         guard let from = itemViews.firstIndex(where: { $0 === view }) else { return }

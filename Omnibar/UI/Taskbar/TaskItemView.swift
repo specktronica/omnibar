@@ -119,30 +119,24 @@ final class TaskItemView: NSView {
     override func layout() {
         super.layout()
         let padding: CGFloat = 8
-        let showDots = dotsView.count > 0
+        let showDots = dotsView.count > 1
         let compact = settings.compactItems || item.isPinnedLauncher
         if compact {
             titleView.isHidden = true
-            let gap: CGFloat = 2
-            let band = showDots ? WindowDotsView.bandHeight : 0
-            let maxIcon = bounds.height - 10
-            var icon = max(16, min(maxIcon, 28))
-            if showDots, icon + gap + band > maxIcon {
-                icon = max(16, maxIcon - gap - band)
-            }
-            let stackHeight = icon + (showDots ? gap + band : 0)
-            let stackY = (bounds.height - stackHeight) / 2
+            let edge: CGFloat = 6
+            let icon = max(16, min(bounds.height - edge * 2, 36))
             iconView.frame = CGRect(
                 x: (bounds.width - icon) / 2,
-                y: stackY + (showDots ? gap + band : 0),
+                y: (bounds.height - icon) / 2,
                 width: icon,
                 height: icon
             )
             if showDots {
+                let band = WindowDotsView.bandHeight
                 dotsView.isHidden = false
                 dotsView.frame = CGRect(
                     x: iconView.frame.minX,
-                    y: stackY,
+                    y: max(0, (iconView.frame.minY - band) / 2),
                     width: icon,
                     height: band
                 )
@@ -152,7 +146,7 @@ final class TaskItemView: NSView {
         } else {
             titleView.isHidden = false
             dotsView.isHidden = true
-            let icon = max(16, min(bounds.height - 10, 28))
+            let icon = max(16, min(bounds.height - 12, 36))
             iconView.frame = CGRect(x: padding, y: (bounds.height - icon) / 2, width: icon, height: icon)
             let x = iconView.frame.maxX + 6
             titleView.frame = CGRect(x: x, y: 0, width: max(0, bounds.width - x - padding), height: bounds.height)
@@ -178,9 +172,12 @@ final class TaskItemView: NSView {
         iconView.image = icon()
         badgeView.text = item.badge
         if settings.groupByApplication, case .grouped = item.kind {
-            dotsView.count = item.windows.count
+            let windows = item.windows
+            dotsView.count = windows.count
+            dotsView.activeIndex = windows.firstIndex(where: \.isActive)
         } else {
             dotsView.count = 0
+            dotsView.activeIndex = nil
         }
         let fontSize = CGFloat(settings.fontSize)
         let base = NSFont.systemFont(ofSize: fontSize)
@@ -294,7 +291,15 @@ private final class WindowDotsView: NSView {
         didSet {
             if count != oldValue {
                 needsDisplay = true
-                isHidden = count == 0
+                isHidden = count <= 1
+            }
+        }
+    }
+
+    var activeIndex: Int? {
+        didSet {
+            if activeIndex != oldValue {
+                needsDisplay = true
             }
         }
     }
@@ -303,14 +308,19 @@ private final class WindowDotsView: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         let shown = min(count, 3)
-        guard shown > 0 else { return }
+        guard shown > 1 else { return }
         let diameter = Self.diameter
         let gap = Self.gap
         let total = CGFloat(shown) * diameter + CGFloat(shown - 1) * gap
         var x = (bounds.width - total) / 2
         let y = (bounds.height - diameter) / 2
-        NSColor.systemBlue.setFill()
-        for _ in 0..<shown {
+        let activeShown: Int? = {
+            guard let activeIndex else { return nil }
+            if activeIndex < shown { return activeIndex }
+            return shown - 1
+        }()
+        for index in 0..<shown {
+            (index == activeShown ? NSColor.systemBlue : NSColor.secondaryLabelColor).setFill()
             NSBezierPath(ovalIn: CGRect(x: x, y: y, width: diameter, height: diameter)).fill()
             x += diameter + gap
         }

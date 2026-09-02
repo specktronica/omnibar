@@ -8,6 +8,8 @@ final class StartMenuPanel: NSPanel {
     private let pinnedGrid = PinnedGridView()
     private let recents = RecentAppsView()
     private var localMonitor: Any?
+    private var globalMonitor: Any?
+    private var startButtonScreenRect: NSRect = .zero
     private var query = ""
 
     init() {
@@ -72,6 +74,7 @@ final class StartMenuPanel: NSPanel {
     override var canBecomeKey: Bool { true }
 
     func present(from startButton: NSRect, screen: NSScreen) {
+        startButtonScreenRect = startButton
         reload()
         let size = NSSize(width: 640, height: min(520, screen.visibleFrame.height - 80))
         var origin = NSPoint(x: startButton.minX, y: startButton.maxY + 8)
@@ -136,18 +139,39 @@ final class StartMenuPanel: NSPanel {
                 return nil
             }
             if event.type == .leftMouseDown || event.type == .rightMouseDown {
-                if event.window !== self && !(event.window is TaskbarPanel) {
-                    self.dismiss()
-                }
+                return self.handleClickOutside(event)
             }
             return event
         }
+        globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
+            Task { @MainActor in
+                self?.dismiss()
+            }
+        }
+    }
+
+    private func handleClickOutside(_ event: NSEvent) -> NSEvent? {
+        if event.window === self { return event }
+        let inStartButton = isClickInStartButton(event)
+        dismiss()
+        // Swallow the start button click so toggleStartMenu does not reopen the menu.
+        return inStartButton ? nil : event
+    }
+
+    private func isClickInStartButton(_ event: NSEvent) -> Bool {
+        guard let window = event.window else { return false }
+        let point = window.convertToScreen(NSRect(origin: event.locationInWindow, size: .zero)).origin
+        return startButtonScreenRect.contains(point)
     }
 
     private func removeMonitor() {
         if let localMonitor {
             NSEvent.removeMonitor(localMonitor)
             self.localMonitor = nil
+        }
+        if let globalMonitor {
+            NSEvent.removeMonitor(globalMonitor)
+            self.globalMonitor = nil
         }
     }
 
