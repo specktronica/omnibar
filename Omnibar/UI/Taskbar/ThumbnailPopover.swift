@@ -25,6 +25,7 @@ final class ThumbnailPopover: NSPanel {
     private var hoverFocusedWindowID: CGWindowID?
     private var restoreWindow: WindowInfo?
     private var restoreFrontPID: pid_t?
+    private var restoreZOrder: [CGWindowID] = []
     private var didTemporarilyRaise = false
     private var hoverFocusCommitted = false
 
@@ -102,6 +103,9 @@ final class ThumbnailPopover: NSPanel {
         if !didTemporarilyRaise {
             restoreWindow = WindowTracker.shared.snapshot.windows.first(where: \.isActive)
             restoreFrontPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
+            restoreZOrder = CGSBridge.shared.onScreenFrontToBackIDs(
+                ownerPIDs: Set(item.windows.map(\.pid))
+            )
         }
         hoverFocusCommitted = false
         hoverFocusedWindowID = item.windows.first(where: \.isActive)?.id
@@ -153,6 +157,7 @@ final class ThumbnailPopover: NSPanel {
         hoverFocusedWindowID = nil
         restoreWindow = nil
         restoreFrontPID = nil
+        restoreZOrder = []
         didTemporarilyRaise = false
         hoverFocusCommitted = false
         refreshTask?.cancel()
@@ -215,6 +220,7 @@ final class ThumbnailPopover: NSPanel {
         guard didTemporarilyRaise, !hoverFocusCommitted else { return }
         didTemporarilyRaise = false
         hoverFocusedWindowID = restoreWindow?.id
+        restorePeekedStacking()
         if let window = restoreWindow {
             WindowActions.raise(window)
         } else if let pid = restoreFrontPID {
@@ -223,6 +229,21 @@ final class ThumbnailPopover: NSPanel {
         }
         if isVisible {
             orderFrontRegardless()
+        }
+    }
+
+    private func restorePeekedStacking() {
+        let ids = restoreZOrder
+        guard ids.count >= 2 else { return }
+        if CGSBridge.shared.restoreFrontToBackOrder(ids) { return }
+        let byID = Dictionary(
+            WindowTracker.shared.snapshot.windows.map { ($0.id, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        for id in ids.reversed() {
+            if let window = byID[id] {
+                WindowActions.raise(window)
+            }
         }
     }
 

@@ -22,16 +22,19 @@ nonisolated final class CGSBridge: SpacesProviding, Sendable {
     private typealias CopySpacesForWindowsProc = @convention(c) (CGSConnectionID, Int32, CFArray) -> Unmanaged<CFArray>?
     private typealias ManagedDisplayGetCurrentSpaceProc = @convention(c) (CGSConnectionID, CFString) -> CGSSpaceID
     private typealias SpaceGetTypeProc = @convention(c) (CGSConnectionID, CGSSpaceID) -> Int32
+    private typealias OrderWindowProc = @convention(c) (CGSConnectionID, CGWindowID, Int32, CGWindowID) -> Int32
 
     private let mainConnection: MainConnectionProc?
     private let copyManagedDisplaySpaces: CopyManagedDisplaySpacesProc?
     private let copySpacesForWindows: CopySpacesForWindowsProc?
     private let managedDisplayGetCurrentSpace: ManagedDisplayGetCurrentSpaceProc?
     private let spaceGetType: SpaceGetTypeProc?
+    private let orderWindow: OrderWindowProc?
     private let connection: CGSConnectionID
 
     private static let allSpacesSelector: Int32 = 7
     private static let fullscreenSpaceType: Int32 = 4
+    private static let orderAbove: Int32 = 1
 
     init() {
         let handle = dlopen("/System/Library/PrivateFrameworks/SkyLight.framework/SkyLight", RTLD_LAZY)
@@ -49,6 +52,8 @@ nonisolated final class CGSBridge: SpacesProviding, Sendable {
             ?? load("SLSManagedDisplayGetCurrentSpace", as: ManagedDisplayGetCurrentSpaceProc.self)
         spaceGetType = load("CGSSpaceGetType", as: SpaceGetTypeProc.self)
             ?? load("SLSSpaceGetType", as: SpaceGetTypeProc.self)
+        orderWindow = load("CGSOrderWindow", as: OrderWindowProc.self)
+            ?? load("SLSOrderWindow", as: OrderWindowProc.self)
         connection = mainConnection?() ?? 0
     }
 
@@ -106,6 +111,32 @@ nonisolated final class CGSBridge: SpacesProviding, Sendable {
             }
         }
         return (current, fullscreen)
+    }
+
+    func onScreenFrontToBackIDs(ownerPIDs: Set<pid_t>) -> [CGWindowID] {
+        guard !ownerPIDs.isEmpty else { return [] }
+        let list = CGWindowListCopyWindowInfo(.optionOnScreenOnly, kCGNullWindowID) as? [[String: Any]] ?? []
+        var result: [CGWindowID] = []
+        for info in list {
+            let layer = (info[kCGWindowLayer as String] as? NSNumber)?.int32Value ?? 0
+            guard layer == 0 else { continue }
+            guard let id = (info[kCGWindowNumber as String] as? NSNumber)?.uint32Value else { continue }
+            let pid = pid_t((info[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value ?? 0)
+            if ownerPIDs.contains(pid) {
+                result.append(id)
+            }
+        }
+        return result
+    }
+
+    @discardableResult
+    func restoreFrontToBackOrder(_ ids: [CGWindowID]) -> Bool {
+        guard ids.count >= 2 else { return true }
+        guard let orderWindow else { return false }
+        for index in stride(from: ids.count - 2, through: 0, by: -1) {
+            _ = orderWindow(connection, ids[index], Self.orderAbove, ids[index + 1])
+        }
+        return true
     }
 
     func spaces(forWindowIDs ids: [CGWindowID]) -> [CGWindowID: [UInt64]] {

@@ -154,6 +154,24 @@ final class TaskListLogicTests: XCTestCase {
     }
 
     @MainActor
+    func testPinnedAppWithWindowsIsNotALauncher() {
+        OrderStore.shared.reset()
+        let safari = stubWindow(id: 1, bundle: "com.apple.Safari", title: "Start")
+        let items = TaskListLogic.items(
+            windows: [safari],
+            pinnedBundleIDs: ["com.apple.Safari"],
+            settings: .default,
+            badge: { _ in nil },
+            icon: { _ in nil },
+            appName: { $0 }
+        )
+        XCTAssertEqual(items.count, 1)
+        XCTAssertFalse(items[0].isPinnedLauncher)
+        XCTAssertFalse(items[0].isActive)
+        XCTAssertEqual(items[0].windows.count, 1)
+    }
+
+    @MainActor
     func testBlacklistIsCallerResponsibility() {
         let blocked = stubWindow(id: 1, bundle: "com.blocked.app")
         let open = stubWindow(id: 2, bundle: "com.ok.app")

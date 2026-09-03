@@ -119,7 +119,7 @@ final class TaskItemView: NSView {
     override func layout() {
         super.layout()
         let padding: CGFloat = 8
-        let showDots = dotsView.count > 1
+        let showRunningMark = dotsView.count > 0
         let compact = settings.compactItems || item.isPinnedLauncher
         if compact {
             titleView.isHidden = true
@@ -131,7 +131,7 @@ final class TaskItemView: NSView {
                 width: icon,
                 height: icon
             )
-            if showDots {
+            if showRunningMark {
                 let band = WindowDotsView.bandHeight
                 dotsView.isHidden = false
                 dotsView.frame = CGRect(
@@ -171,9 +171,12 @@ final class TaskItemView: NSView {
     private func refresh() {
         iconView.image = icon()
         badgeView.text = item.badge
-        if settings.groupByApplication, case .grouped = item.kind {
+        if item.isPinnedLauncher {
+            dotsView.count = 0
+            dotsView.activeIndex = nil
+        } else if settings.compactItems {
             let windows = item.windows
-            dotsView.count = windows.count
+            dotsView.count = max(windows.count, 1)
             dotsView.activeIndex = windows.firstIndex(where: \.isActive)
         } else {
             dotsView.count = 0
@@ -291,7 +294,7 @@ private final class WindowDotsView: NSView {
         didSet {
             if count != oldValue {
                 needsDisplay = true
-                isHidden = count <= 1
+                isHidden = count < 1
             }
         }
     }
@@ -308,7 +311,11 @@ private final class WindowDotsView: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         let shown = min(count, 3)
-        guard shown > 1 else { return }
+        guard shown >= 1 else { return }
+        if shown == 1 {
+            drawRunningMark(active: activeIndex != nil)
+            return
+        }
         let diameter = Self.diameter
         let gap = Self.gap
         let total = CGFloat(shown) * diameter + CGFloat(shown - 1) * gap
@@ -324,6 +331,20 @@ private final class WindowDotsView: NSView {
             NSBezierPath(ovalIn: CGRect(x: x, y: y, width: diameter, height: diameter)).fill()
             x += diameter + gap
         }
+    }
+
+    private func drawRunningMark(active: Bool) {
+        let height: CGFloat = 3
+        let width: CGFloat = active ? 22 : 12
+        let rect = CGRect(
+            x: (bounds.width - width) / 2,
+            y: (bounds.height - height) / 2,
+            width: width,
+            height: height
+        )
+        let color = NSColor.systemBlue.withAlphaComponent(active ? 1 : 0.55)
+        color.setFill()
+        NSBezierPath(roundedRect: rect, xRadius: height / 2, yRadius: height / 2).fill()
     }
 }
 

@@ -6,8 +6,8 @@ final class StatusItemController {
     func setup() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         if let button = item.button {
-            button.image = BrandIcon.image(pointSize: 18)
-            button.image?.isTemplate = false
+            button.image = BrandIcon.menuBarImage(pointSize: 18)
+            button.image?.isTemplate = true
             button.imagePosition = .imageOnly
             button.imageScaling = .scaleProportionallyDown
             button.image?.accessibilityDescription = "Omnibar"
