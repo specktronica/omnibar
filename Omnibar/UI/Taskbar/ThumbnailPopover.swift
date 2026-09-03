@@ -6,6 +6,7 @@ final class ThumbnailPopover: NSPanel {
     private static let cardGap: CGFloat = 8
     private static let verticalInset: CGFloat = 4
     fileprivate static let horizontalInset: CGFloat = 44
+    private static let hoverFocusDelay: TimeInterval = 0.12
 
     private let effect = ThumbnailRootView()
     private let cards: [ThumbnailCardView] = (0..<maxVisibleCards).map { _ in ThumbnailCardView() }
@@ -20,7 +21,12 @@ final class ThumbnailPopover: NSPanel {
     private var thumbnailSize: CGFloat = 240
     private var refreshTask: Task<Void, Never>?
     private var hoverFocusWork: DispatchWorkItem?
+    private var restoreWork: DispatchWorkItem?
     private var hoverFocusedWindowID: CGWindowID?
+    private var restoreWindow: WindowInfo?
+    private var restoreFrontPID: pid_t?
+    private var didTemporarilyRaise = false
+    private var hoverFocusCommitted = false
 
     private var visibleCount: Int { min(Self.maxVisibleCards, windows.count) }
 
@@ -51,19 +57,26 @@ final class ThumbnailPopover: NSPanel {
             card.onHover = { [weak self] window in
                 self?.focusHoveredPreview(window)
             }
+            card.onHoverEnd = { [weak self] in
+                self?.unfocusHoveredPreview()
+            }
             card.onRaise = { [weak self] window in
+                self?.commitHoverFocus()
                 WindowActions.raise(window)
                 self?.dismiss()
             }
             card.onClose = { [weak self] window in
+                self?.commitHoverFocus()
                 WindowActions.close(window)
                 self?.dismiss()
             }
             card.onMinimize = { [weak self] window in
+                self?.commitHoverFocus()
                 WindowActions.minimize(window)
                 self?.dismiss()
             }
             card.onZoom = { [weak self] window in
+                self?.commitHoverFocus()
                 if NSEvent.modifierFlags.contains(.option) || window.isFullscreen {
                     WindowActions.fullscreen(window)
                 } else {
@@ -84,6 +97,13 @@ final class ThumbnailPopover: NSPanel {
         guard !item.windows.isEmpty else { return }
         hoverFocusWork?.cancel()
         hoverFocusWork = nil
+        restoreWork?.cancel()
+        restoreWork = nil
+        if !didTemporarilyRaise {
+            restoreWindow = WindowTracker.shared.snapshot.windows.first(where: \.isActive)
+            restoreFrontPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
+        }
+        hoverFocusCommitted = false
         hoverFocusedWindowID = item.windows.first(where: \.isActive)?.id
         self.item = item
         windows = item.windows
@@ -127,7 +147,14 @@ final class ThumbnailPopover: NSPanel {
     func dismiss() {
         hoverFocusWork?.cancel()
         hoverFocusWork = nil
+        restoreWork?.cancel()
+        restoreWork = nil
+        restorePreviousFocusIfNeeded()
         hoverFocusedWindowID = nil
+        restoreWindow = nil
+        restoreFrontPID = nil
+        didTemporarilyRaise = false
+        hoverFocusCommitted = false
         refreshTask?.cancel()
         refreshTask = nil
         isHovered = false
@@ -150,16 +177,53 @@ final class ThumbnailPopover: NSPanel {
     }
 
     private func focusHoveredPreview(_ window: WindowInfo) {
+        restoreWork?.cancel()
+        restoreWork = nil
         guard window.id != hoverFocusedWindowID else { return }
         hoverFocusWork?.cancel()
         let work = DispatchWorkItem { [weak self] in
-            guard let self, self.isVisible else { return }
+            guard let self, self.isVisible, !self.hoverFocusCommitted else { return }
             WindowActions.raise(window)
+            self.didTemporarilyRaise = true
             self.hoverFocusedWindowID = window.id
             self.orderFrontRegardless()
         }
         hoverFocusWork = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12, execute: work)
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.hoverFocusDelay, execute: work)
+    }
+
+    private func unfocusHoveredPreview() {
+        hoverFocusWork?.cancel()
+        hoverFocusWork = nil
+        restoreWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            self?.restorePreviousFocusIfNeeded()
+        }
+        restoreWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.hoverFocusDelay, execute: work)
+    }
+
+    private func commitHoverFocus() {
+        hoverFocusCommitted = true
+        hoverFocusWork?.cancel()
+        hoverFocusWork = nil
+        restoreWork?.cancel()
+        restoreWork = nil
+    }
+
+    private func restorePreviousFocusIfNeeded() {
+        guard didTemporarilyRaise, !hoverFocusCommitted else { return }
+        didTemporarilyRaise = false
+        hoverFocusedWindowID = restoreWindow?.id
+        if let window = restoreWindow {
+            WindowActions.raise(window)
+        } else if let pid = restoreFrontPID {
+            NSRunningApplication(processIdentifier: pid)?.unhide()
+            NSRunningApplication(processIdentifier: pid)?.activate(options: [.activateIgnoringOtherApps])
+        }
+        if isVisible {
+            orderFrontRegardless()
+        }
     }
 
     private func page(by delta: Int) {

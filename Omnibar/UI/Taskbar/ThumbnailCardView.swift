@@ -6,6 +6,7 @@ final class ThumbnailCardView: NSView {
     static let contentInset: CGFloat = 6
 
     var onHover: ((WindowInfo) -> Void)?
+    var onHoverEnd: (() -> Void)?
     var onRaise: ((WindowInfo) -> Void)?
     var onClose: ((WindowInfo) -> Void)?
     var onMinimize: ((WindowInfo) -> Void)?
@@ -78,6 +79,15 @@ final class ThumbnailCardView: NSView {
         if let windowInfo {
             onHover?(windowInfo)
         }
+        _ = event
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        if let window {
+            let screenRect = window.convertToScreen(convert(bounds, to: nil))
+            if screenRect.contains(NSEvent.mouseLocation) { return }
+        }
+        onHoverEnd?()
         _ = event
     }
 

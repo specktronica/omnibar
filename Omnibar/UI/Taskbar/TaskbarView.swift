@@ -14,6 +14,7 @@ final class TaskbarView: NSView {
     var isDragging: Bool { draggingView != nil }
 
     private let startButton = StartButtonView()
+    private let startDivider = StartDivider()
     private var itemViews: [TaskItemView] = []
     private var items: [TaskItem] = []
     private var settings: AppSettings = .default
@@ -25,6 +26,7 @@ final class TaskbarView: NSView {
         startButton.onLeftClick = { [weak self] in self?.onStartLeftClick?() }
         startButton.onRightClick = { [weak self] event in self?.onStartRightClick?(event) }
         addSubview(startButton)
+        addSubview(startDivider)
     }
 
     required init?(coder: NSCoder) { nil }
@@ -50,6 +52,13 @@ final class TaskbarView: NSView {
         let height = bounds.height
         let startWidth = max(height, 36)
         startButton.frame = CGRect(x: 4, y: 0, width: startWidth, height: height)
+        let dividerInset: CGFloat = 8
+        startDivider.frame = CGRect(
+            x: startButton.frame.maxX + 4,
+            y: dividerInset,
+            width: 1,
+            height: max(0, height - dividerInset * 2)
+        )
         if draggingView == nil {
             layoutItems()
         }
@@ -89,7 +98,7 @@ final class TaskbarView: NSView {
     }
 
     private func slotMetrics() -> (originX: CGFloat, tileWidth: CGFloat) {
-        let originX = startButton.frame.maxX + 4
+        let originX = startDivider.frame.maxX + 4
         let available = max(0, bounds.width - originX - 8)
         let count = max(1, itemViews.count)
         let maxTile: CGFloat = settings.compactItems ? bounds.height + 16 : 220
@@ -183,5 +192,16 @@ final class TaskbarView: NSView {
         draggingView = nil
         onReorder?(items)
         needsLayout = true
+    }
+}
+
+private final class StartDivider: NSView {
+    override var isOpaque: Bool { false }
+
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    override func draw(_ dirtyRect: NSRect) {
+        NSColor.separatorColor.withAlphaComponent(0.45).setFill()
+        bounds.fill()
     }
 }
