@@ -25,7 +25,7 @@ final class ThumbnailPopover: NSPanel {
     private var hoverFocusedWindowID: CGWindowID?
     private var restoreWindow: WindowInfo?
     private var restoreFrontPID: pid_t?
-    private var restoreZOrder: [CGWindowID] = []
+    private var restoreZOrder: [(id: CGWindowID, pid: pid_t)] = []
     private var didTemporarilyRaise = false
     private var hoverFocusCommitted = false
 
@@ -103,10 +103,8 @@ final class ThumbnailPopover: NSPanel {
         if !didTemporarilyRaise {
             restoreWindow = WindowTracker.shared.snapshot.windows.first(where: \.isActive)
             restoreFrontPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
-            restoreZOrder = CGSBridge.shared.onScreenFrontToBackIDs(
-                ownerPIDs: Set(item.windows.map(\.pid))
-            )
         }
+        captureZOrderIfNeeded(for: item)
         hoverFocusCommitted = false
         hoverFocusedWindowID = item.windows.first(where: \.isActive)?.id
         self.item = item
@@ -232,19 +230,20 @@ final class ThumbnailPopover: NSPanel {
         }
     }
 
+    private func captureZOrderIfNeeded(for item: TaskItem) {
+        let pids = Set(item.windows.map(\.pid))
+        let captured = Set(restoreZOrder.map(\.pid))
+        let newPIDs = pids.subtracting(captured)
+        guard !newPIDs.isEmpty else { return }
+        restoreZOrder.append(contentsOf: CGSBridge.shared.onScreenFrontToBackIDs(ownerPIDs: newPIDs))
+    }
+
     private func restorePeekedStacking() {
-        let ids = restoreZOrder
-        guard ids.count >= 2 else { return }
-        if CGSBridge.shared.restoreFrontToBackOrder(ids) { return }
-        let byID = Dictionary(
-            WindowTracker.shared.snapshot.windows.map { ($0.id, $0) },
-            uniquingKeysWith: { first, _ in first }
-        )
-        for id in ids.reversed() {
-            if let window = byID[id] {
-                WindowActions.raise(window)
-            }
-        }
+        guard restoreZOrder.count >= 2 else { return }
+        let pids = Set(restoreZOrder.map(\.pid))
+        let current = CGSBridge.shared.onScreenFrontToBackIDs(ownerPIDs: pids)
+        if current.map(\.id) == restoreZOrder.map(\.id) { return }
+        WindowActions.restack(frontToBack: restoreZOrder)
     }
 
     private func page(by delta: Int) {

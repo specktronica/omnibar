@@ -13,6 +13,16 @@ enum WindowActions {
         NSRunningApplication(processIdentifier: window.pid)?.activate(options: [.activateIgnoringOtherApps])
     }
 
+    static func restack(frontToBack: [(id: CGWindowID, pid: pid_t)]) {
+        for window in frontToBack.reversed() {
+            let element = WindowTracker.shared.axElement(for: window.id)
+                ?? AXBridge.element(forWindowID: window.id, pid: window.pid)
+            if let element {
+                AXBridge.raise(element)
+            }
+        }
+    }
+
     static func minimize(_ window: WindowInfo) {
         if let element = element(for: window) {
             AXBridge.setMinimized(element, true)
