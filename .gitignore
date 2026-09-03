@@ -12,3 +12,15 @@ xcuserdata/
 *.ipa
 *.dSYM.zip
 *.dSYM
+*.zip
+
+# Signing / notarization secrets — never commit
+*.p8
+*.p12
+*.pfx
+*.p15
+*.key
+*.mobileprovision
+AuthKey_*.p8
+.env
+.env.*

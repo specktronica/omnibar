@@ -14,7 +14,7 @@ Omnibar/
   Resources/    assets, entitlements
 OmnibarTests/   logic and geometry tests (no live window-server tests)
 project.yml     XcodeGen spec
-scripts/        bootstrap (XcodeGen) and build
+scripts/        bootstrap (XcodeGen), build, and release zip
 ```
 
 ## Startup

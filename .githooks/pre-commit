@@ -1,0 +1,4 @@
+#!/bin/sh
+# Installed via scripts/bootstrap.sh (git config core.hooksPath .githooks).
+root="$(git rev-parse --show-toplevel)"
+exec "$root/scripts/check-secrets.sh"

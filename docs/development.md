@@ -55,6 +55,22 @@ The scheme is `Omnibar`; tests are attached as `OmnibarTests`.
 
 After `xcodebuild`, the script copies the `.app` to `build/Omnibar.app` and `codesign`s it with `Omnibar/Resources/Omnibar.entitlements` and `--options runtime`.
 
+## Release zip
+
+`make release` (or `./scripts/package.sh`) builds a **universal** (arm64 + x86_64) app with the first **Developer ID Application** identity in the keychain, re-signs with a secure timestamp, submits a zip to Apple notary, staples the ticket, and writes `build/Omnibar-<MARKETING_VERSION>.zip` plus its SHA-256. Local `make build` stays host-architecture unless `ARCHS` is set.
+
+It does not fall back to Apple Development. Override the identity with `CODESIGN_IDENTITY` (exact common name or SHA-1 hash). The notary keychain profile defaults to `notarytool-specktronica`; override with `NOTARYTOOL_PROFILE`. Store credentials interactively (the tool prompts; do not put a password on the command line or in git):
+
+```bash
+xcrun notarytool store-credentials notarytool-specktronica
+```
+
+`SKIP_NOTARY=1 make release` writes the zip without notarization. That archive will not pass Gatekeeper.
+
+Publish `build/Omnibar-<version>.zip` as a GitHub Release asset on tag `v<version>`. Then update `version` and `sha256` in [specktronica/homebrew-omnibar](https://github.com/specktronica/homebrew-omnibar) `Casks/omnibar.rb`.
+
+`scripts/bootstrap.sh` points `core.hooksPath` at `.githooks`. The pre-commit hook runs `scripts/check-secrets.sh` and blocks private keys, `.p8` / `.p12` files, and GitHub tokens. `make release` runs the same check against tracked files. Do not paste `security find-identity` output into issues.
+
 TCC (Accessibility and Screen Recording) stores a code-signing **requirement**, not just the bundle ID:
 
 - A development identity yields a requirement based on bundle ID and team, so grants survive rebuilds.

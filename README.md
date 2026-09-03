@@ -6,6 +6,14 @@ It runs as a menu-bar accessory (`LSUIElement`): there is no Dock icon except du
 
 Minimum macOS: 14. Built with Swift 6 and AppKit.
 
+## Install
+
+```bash
+brew install --cask specktronica/omnibar/omnibar
+```
+
+After install, grant **Accessibility** in System Settings. **Screen Recording** is optional (live hover thumbnails).
+
 ## Build
 
 ```bash
@@ -19,6 +27,7 @@ open build/Omnibar.app
 ```bash
 make build    # same as ./scripts/build.sh
 make run      # build, kill a running Omnibar, open build/Omnibar.app
+make release  # Developer ID sign, notarize, staple, zip to build/Omnibar-<version>.zip
 ```
 
 Or open the generated project:

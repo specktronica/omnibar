@@ -13,3 +13,8 @@ fi
 
 xcodegen generate
 echo "Generated Omnibar.xcodeproj"
+
+if [[ -d .git ]]; then
+  git config core.hooksPath .githooks
+  chmod +x .githooks/pre-commit scripts/check-secrets.sh
+fi
