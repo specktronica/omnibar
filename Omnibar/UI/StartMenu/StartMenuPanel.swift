@@ -19,6 +19,7 @@ final class StartMenuPanel: NSPanel {
     private var lastAppIDs: [String] = []
     private var lastPinIDs: [String] = []
     private var lastRecentIDs: [String] = []
+    private var pendingSearchFocus = false
 
     init() {
         super.init(
@@ -32,7 +33,7 @@ final class StartMenuPanel: NSPanel {
         hasShadow = true
         hidesOnDeactivate = false
         isFloatingPanel = true
-        becomesKeyOnlyIfNeeded = true
+        becomesKeyOnlyIfNeeded = false
         level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.popUpMenuWindow)))
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient]
         effect.material = .menu
@@ -94,13 +95,29 @@ final class StartMenuPanel: NSPanel {
         searchField.stringValue = ""
         query = ""
         reload()
+        pendingSearchFocus = true
+        // Start-button clicks land on a nonactivating taskbar, so take key
+        // status explicitly or the search field cannot accept typing.
+        activateForSearch()
+        makeKeyAndOrderFront(nil)
         orderFrontRegardless()
-        makeFirstResponder(searchField)
+        focusSearchField()
+        DispatchQueue.main.async { [weak self] in
+            self?.focusSearchField()
+        }
         installMonitor()
         onPresented?()
     }
 
+    override func becomeKey() {
+        super.becomeKey()
+        if pendingSearchFocus {
+            focusSearchField()
+        }
+    }
+
     func dismiss() {
+        pendingSearchFocus = false
         let wasVisible = isVisible
         removeMonitor()
         orderOut(nil)
@@ -116,6 +133,32 @@ final class StartMenuPanel: NSPanel {
     @objc private func searchChanged() {
         query = searchField.stringValue
         reload()
+    }
+
+    private func activateForSearch() {
+        NSApp.activate()
+        let current = NSRunningApplication.current
+        if let front = NSWorkspace.shared.frontmostApplication,
+           front.processIdentifier != current.processIdentifier {
+            _ = current.activate(from: front)
+        }
+    }
+
+    private func focusSearchField() {
+        guard isVisible, pendingSearchFocus else { return }
+        if firstResponder === searchField || firstResponder === searchField.currentEditor() {
+            pendingSearchFocus = false
+            return
+        }
+        makeFirstResponder(searchField)
+        searchField.selectText(nil)
+        if let editor = searchField.currentEditor() {
+            let end = (editor.string as NSString).length
+            editor.selectedRange = NSRange(location: end, length: 0)
+        }
+        if firstResponder === searchField || firstResponder === searchField.currentEditor() {
+            pendingSearchFocus = false
+        }
     }
 
     private func reload() {

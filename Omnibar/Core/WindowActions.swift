@@ -102,6 +102,10 @@ enum WindowActions {
         }
     }
 
+    static func handleMiddleClick(_ item: TaskItem) {
+        newWindow(pid: item.pid, bundleID: item.bundleID)
+    }
+
     private static func element(for window: WindowInfo) -> AXUIElement? {
         WindowTracker.shared.axElement(for: window.id)
             ?? AXBridge.element(forWindowID: window.id, pid: window.pid)

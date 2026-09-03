@@ -4,6 +4,7 @@ import Foundation
 final class TaskItemView: NSView {
     private(set) var item: TaskItem
     var onClick: ((TaskItem) -> Void)?
+    var onMiddleClick: ((TaskItem) -> Void)?
     var onRightClick: ((TaskItem, NSEvent) -> Void)?
     var onHover: ((TaskItem) -> Void)?
     var onHoverEnd: (() -> Void)?
@@ -86,6 +87,12 @@ final class TaskItemView: NSView {
         onHoverEnd?()
     }
 
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        bounds.contains(point) ? self : nil
+    }
+
     override func mouseDown(with event: NSEvent) {
         mouseDownEvent = event
         dragging = false
@@ -115,6 +122,14 @@ final class TaskItemView: NSView {
 
     override func rightMouseDown(with event: NSEvent) {
         onRightClick?(item, event)
+    }
+
+    override func otherMouseDown(with event: NSEvent) {
+        guard event.buttonNumber == 2 else {
+            super.otherMouseDown(with: event)
+            return
+        }
+        onMiddleClick?(item)
     }
 
     override func resetCursorRects() {
@@ -245,7 +260,7 @@ final class TaskItemView: NSView {
         let title = attributedTitle(base: base, bold: bold)
         titleView.attributedStringValue = title
         titleView.font = item.isActive ? bold : base
-        titleView.toolTip = title.string
+        toolTip = title.string.isEmpty ? nil : title.string
     }
 
     private func icon() -> NSImage? {

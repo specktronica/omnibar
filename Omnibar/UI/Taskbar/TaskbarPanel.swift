@@ -13,6 +13,7 @@ final class TaskbarPanel: NSPanel {
     private var autoHidden = false
     private(set) var isSuppressed = false
     private var hoverItem: TaskItem?
+    nonisolated(unsafe) private var otherMouseMonitor: Any?
 
     init(screen: NSScreen) {
         currentScreen = screen
@@ -32,6 +33,9 @@ final class TaskbarPanel: NSPanel {
         startMenu.onPresented = { [weak self] in self?.taskbarView.spinStartButton(opening: true) }
         startMenu.onDismissed = { [weak self] in self?.taskbarView.spinStartButton(opening: false) }
         taskbarView.onItemClick = { item in WindowActions.handlePrimaryClick(item) }
+        taskbarView.onItemMiddleClick = { [weak self] item in
+            self?.openNewWindow(for: item)
+        }
         taskbarView.onItemRightClick = { [weak self] item, event in
             self?.showContextMenu(for: item, event: event)
         }
@@ -47,6 +51,18 @@ final class TaskbarPanel: NSPanel {
         orderFrontRegardless()
         applyAppearance()
         applySnapshot(WindowTracker.shared.snapshot)
+        installOtherMouseMonitor()
+    }
+
+    deinit {
+        if let otherMouseMonitor {
+            NSEvent.removeMonitor(otherMouseMonitor)
+        }
+    }
+
+    override func close() {
+        removeOtherMouseMonitor()
+        super.close()
     }
 
     override var canBecomeKey: Bool { false }
@@ -206,6 +222,29 @@ final class TaskbarPanel: NSPanel {
     private func showContextMenu(for item: TaskItem, event: NSEvent) {
         let menu = TaskContextMenu.build(item: item, displayID: screenID)
         NSMenu.popUpContextMenu(menu, with: event, for: taskbarView)
+    }
+
+    private func openNewWindow(for item: TaskItem) {
+        thumbnail.dismiss()
+        WindowActions.handleMiddleClick(item)
+    }
+
+    private func installOtherMouseMonitor() {
+        removeOtherMouseMonitor()
+        otherMouseMonitor = NSEvent.addLocalMonitorForEvents(matching: .otherMouseDown) { [weak self] event in
+            guard let self, event.buttonNumber == 2 else { return event }
+            guard self.isVisible, !self.isSuppressed else { return event }
+            guard let item = self.taskbarView.item(at: event) else { return event }
+            self.openNewWindow(for: item)
+            return nil
+        }
+    }
+
+    private func removeOtherMouseMonitor() {
+        if let otherMouseMonitor {
+            NSEvent.removeMonitor(otherMouseMonitor)
+            self.otherMouseMonitor = nil
+        }
     }
 
     private func scheduleThumbnail(for item: TaskItem) {

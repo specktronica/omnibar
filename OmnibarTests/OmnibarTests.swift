@@ -455,6 +455,65 @@ final class TaskItemIconLayoutTests: XCTestCase {
     }
 }
 
+final class TaskItemMiddleClickTests: XCTestCase {
+    @MainActor
+    func testMiddleClickFiresNewWindowCallback() {
+        let item = TaskItem(
+            id: "pin-x",
+            kind: .pinned(bundleID: "x", appName: "X", icon: nil, badge: nil)
+        )
+        let view = TaskItemView(item: item, settings: .default)
+        view.frame = NSRect(x: 0, y: 0, width: 48, height: 38)
+        var clicked: String?
+        view.onMiddleClick = { clicked = $0.id }
+        view.otherMouseDown(with: mouseEvent(type: .otherMouseDown, button: .center, location: NSPoint(x: 24, y: 19)))
+        XCTAssertEqual(clicked, item.id)
+    }
+
+    @MainActor
+    func testTaskbarViewForwardsMiddleClick() {
+        let bar = TaskbarView(frame: NSRect(x: 0, y: 0, width: 400, height: 40))
+        let item = TaskItem(
+            id: "pin-x",
+            kind: .pinned(bundleID: "x", appName: "X", icon: nil, badge: nil)
+        )
+        bar.update(items: [item], settings: .default)
+        bar.layoutSubtreeIfNeeded()
+        var clicked: String?
+        bar.onItemMiddleClick = { clicked = $0.id }
+        let itemView = bar.view(forItemID: item.id) as? TaskItemView
+        XCTAssertNotNil(itemView)
+        itemView?.otherMouseDown(with: mouseEvent(type: .otherMouseDown, button: .center, location: NSPoint(x: 24, y: 19)))
+        XCTAssertEqual(clicked, item.id)
+    }
+
+    @MainActor
+    func testLeftClickDoesNotFireMiddleClick() {
+        let item = TaskItem(
+            id: "pin-x",
+            kind: .pinned(bundleID: "x", appName: "X", icon: nil, badge: nil)
+        )
+        let view = TaskItemView(item: item, settings: .default)
+        view.frame = NSRect(x: 0, y: 0, width: 48, height: 38)
+        var middle = false
+        view.onMiddleClick = { _ in middle = true }
+        view.mouseDown(with: mouseEvent(type: .leftMouseDown, button: .left, location: NSPoint(x: 24, y: 19)))
+        view.mouseUp(with: mouseEvent(type: .leftMouseUp, button: .left, location: NSPoint(x: 24, y: 19)))
+        XCTAssertFalse(middle)
+    }
+
+    @MainActor
+    private func mouseEvent(type: CGEventType, button: CGMouseButton, location: NSPoint) -> NSEvent {
+        let cgEvent = CGEvent(
+            mouseEventSource: nil,
+            mouseType: type,
+            mouseCursorPosition: CGPoint(x: location.x, y: location.y),
+            mouseButton: button
+        )!
+        return NSEvent(cgEvent: cgEvent)!
+    }
+}
+
 final class ThumbnailPreviewClickTests: XCTestCase {
     @MainActor
     func testMiddleClickClosesPreviewWindow() {

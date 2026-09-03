@@ -6,6 +6,7 @@ final class TaskbarView: NSView {
     var onStartLeftClick: (() -> Void)?
     var onStartRightClick: ((NSEvent) -> Void)?
     var onItemClick: ((TaskItem) -> Void)?
+    var onItemMiddleClick: ((TaskItem) -> Void)?
     var onItemRightClick: ((TaskItem, NSEvent) -> Void)?
     var onItemHover: ((TaskItem) -> Void)?
     var onItemHoverEnd: (() -> Void)?
@@ -55,6 +56,20 @@ final class TaskbarView: NSView {
         itemViews.first { $0.item.id == id }
     }
 
+    func item(at event: NSEvent) -> TaskItem? {
+        guard let window else { return nil }
+        let screenPoint: NSPoint
+        if let eventWindow = event.window {
+            screenPoint = eventWindow.convertToScreen(NSRect(origin: event.locationInWindow, size: .zero)).origin
+        } else {
+            screenPoint = NSEvent.mouseLocation
+        }
+        guard window.frame.contains(screenPoint) else { return nil }
+        let windowPoint = window.convertFromScreen(NSRect(origin: screenPoint, size: .zero)).origin
+        let local = convert(windowPoint, from: nil)
+        return itemViews.first { $0.frame.contains(local) }?.item
+    }
+
     override func layout() {
         super.layout()
         let height = bounds.height
@@ -101,6 +116,7 @@ final class TaskbarView: NSView {
 
     private func wire(_ view: TaskItemView) {
         view.onClick = { [weak self] item in self?.onItemClick?(item) }
+        view.onMiddleClick = { [weak self] item in self?.onItemMiddleClick?(item) }
         view.onRightClick = { [weak self] item, event in self?.onItemRightClick?(item, event) }
         view.onHover = { [weak self] item in self?.onItemHover?(item) }
         view.onHoverEnd = { [weak self] in self?.onItemHoverEnd?() }
