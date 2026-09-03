@@ -119,14 +119,21 @@ final class StartMenuPanel: NSPanel {
         let bounds = effect.bounds
         let padding: CGFloat = 16
         let gutter: CGFloat = 12
+        let searchHeight: CGFloat = 28
+        let searchGap: CGFloat = 12
         let dividerX = bounds.width * 0.55
         let leftWidth = max(dividerX - padding - gutter, 0)
-        searchField.frame = NSRect(x: padding, y: bounds.height - 44, width: leftWidth, height: 28)
+        searchField.frame = NSRect(
+            x: padding,
+            y: bounds.height - padding - searchHeight,
+            width: leftWidth,
+            height: searchHeight
+        )
         appList.frame = NSRect(
             x: padding,
             y: padding,
             width: leftWidth,
-            height: bounds.height - 60
+            height: bounds.height - padding * 2 - searchHeight - searchGap
         )
         columnDivider.frame = NSRect(x: dividerX, y: 0, width: 1, height: bounds.height)
         let rightX = dividerX + gutter
