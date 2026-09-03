@@ -14,6 +14,14 @@ brew install --cask specktronica/omnibar/omnibar
 
 After install, grant **Accessibility** in System Settings. **Screen Recording** is optional (live hover thumbnails).
 
+## Uninstall
+
+```bash
+make remove
+```
+
+Quits Omnibar, restores the Dock if Omnibar had fully hidden it, deletes `/Applications/Omnibar.app` and `~/Applications/Omnibar.app`, uninstalls the Homebrew cask, untaps `specktronica/omnibar`, removes preferences and caches, resets Accessibility and Screen Recording grants, and deletes the login item. Repo build products (`build/Omnibar.app`) are left in place.
+
 ## Build
 
 ```bash
@@ -28,6 +36,8 @@ open build/Omnibar.app
 make build    # same as ./scripts/build.sh
 make run      # build, kill a running Omnibar, open build/Omnibar.app
 make release  # Developer ID sign, notarize, staple, zip to build/Omnibar-<version>.zip
+make publish  # GitHub Release + Homebrew tap (needs the zip from make release)
+make remove   # uninstall Applications copies, Homebrew cask/tap, prefs, TCC, login item
 ```
 
 Or open the generated project:

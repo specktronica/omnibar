@@ -38,6 +38,8 @@ make run
 
 `make run` kills an existing `Omnibar` process, then `open`s `build/Omnibar.app`.
 
+`make remove` (`scripts/remove.sh`) uninstalls installed copies. It quits a running Omnibar (Apple Event, then SIGTERM/SIGKILL), restores Dock settings from `omnibar.dock.backup.v1` when that key exists, or from the fully-hidden signature (`autohide-delay` 1000 and orientation `top`), deletes the System Events login item named Omnibar, runs `brew uninstall --cask --zap omnibar` when the cask is installed, deletes `/Applications/Omnibar.app` and `~/Applications/Omnibar.app`, deletes the `io.specktronica.omnibar` defaults domain and related Library caches, runs `tccutil reset All io.specktronica.omnibar`, and untaps `specktronica/omnibar`. It does not delete `build/Omnibar.app` or DerivedData.
+
 Derived data for script builds lives in `build/DerivedData`. The copied app is `build/Omnibar.app`.
 
 To work in Xcode:
@@ -67,7 +69,11 @@ xcrun notarytool store-credentials notarytool-specktronica
 
 `SKIP_NOTARY=1 make release` writes the zip without notarization. That archive will not pass Gatekeeper.
 
-Publish `build/Omnibar-<version>.zip` as a GitHub Release asset on tag `v<version>`. Then update `version` and `sha256` in [specktronica/homebrew-omnibar](https://github.com/specktronica/homebrew-omnibar) `Casks/omnibar.rb`.
+`make publish` (or `./scripts/publish.sh`) uploads `build/Omnibar-<version>.zip` to a GitHub Release on tag `v<version>` and sets `version` and `sha256` in [specktronica/homebrew-omnibar](https://github.com/specktronica/homebrew-omnibar) `Casks/omnibar.rb`. The zip must be stapled; `SKIP_NOTARY=1` archives are rejected. Creating a new tag requires a clean `main` that matches `origin/main`. `DRY_RUN=1` prints the plan. `FORCE=1` replaces a same-version release asset and cask checksum.
+
+```bash
+make release publish
+```
 
 `scripts/bootstrap.sh` points `core.hooksPath` at `.githooks`. The pre-commit hook runs `scripts/check-secrets.sh` and blocks private keys, `.p8` / `.p12` files, and GitHub tokens. `make release` runs the same check against tracked files. Do not paste `security find-identity` output into issues.
 
