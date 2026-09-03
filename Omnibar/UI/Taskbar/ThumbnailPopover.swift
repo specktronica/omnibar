@@ -1,8 +1,31 @@
 import AppKit
 import Foundation
 
+enum ThumbnailPaging {
+    static let maxVisibleCards = 3
+
+    static func visibleCount(windowCount: Int) -> Int {
+        min(maxVisibleCards, windowCount)
+    }
+
+    static func initialOffset(activeIndex: Int, windowCount: Int) -> Int {
+        let visible = visibleCount(windowCount: windowCount)
+        let maxOffset = max(0, windowCount - visible)
+        if activeIndex >= visible {
+            return min(activeIndex - visible + 1, maxOffset)
+        }
+        return 0
+    }
+
+    static func page(offset: Int, delta: Int, windowCount: Int) -> Int {
+        let visible = visibleCount(windowCount: windowCount)
+        let maxOffset = max(0, windowCount - visible)
+        return min(max(0, offset + delta), maxOffset)
+    }
+}
+
 final class ThumbnailPopover: NSPanel {
-    private static let maxVisibleCards = 3
+    private static let maxVisibleCards = ThumbnailPaging.maxVisibleCards
     private static let cardGap: CGFloat = 8
     private static let verticalInset: CGFloat = 4
     private static let compactHorizontalInset: CGFloat = 4
@@ -117,12 +140,7 @@ final class ThumbnailPopover: NSPanel {
         windows = item.windows
         let visible = visibleCount
         let activeIndex = windows.firstIndex(where: \.isActive) ?? 0
-        let maxOffset = max(0, windows.count - visible)
-        if activeIndex >= visible {
-            offset = min(activeIndex - visible + 1, maxOffset)
-        } else {
-            offset = 0
-        }
+        offset = ThumbnailPaging.initialOffset(activeIndex: activeIndex, windowCount: windows.count)
 
         let settings = SettingsStore.shared.settings
         thumbnailSize = CGFloat(settings.thumbnailSize)
@@ -266,8 +284,7 @@ final class ThumbnailPopover: NSPanel {
     }
 
     private func page(by delta: Int) {
-        let maxOffset = max(0, windows.count - visibleCount)
-        let next = min(max(0, offset + delta), maxOffset)
+        let next = ThumbnailPaging.page(offset: offset, delta: delta, windowCount: windows.count)
         guard next != offset else { return }
         hoverFocusWork?.cancel()
         hoverFocusWork = nil
@@ -510,7 +527,7 @@ private final class ReelArrowButton: NSView {
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
     override func hitTest(_ point: NSPoint) -> NSView? {
-        bounds.contains(point) ? self : nil
+        frame.contains(point) ? self : nil
     }
 
     override func layout() {

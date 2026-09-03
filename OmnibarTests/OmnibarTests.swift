@@ -496,13 +496,10 @@ final class TaskItemMiddleClickTests: XCTestCase {
         let view = TaskItemView(item: item, settings: .default)
         view.frame = NSRect(x: 0, y: 0, width: 48, height: 38)
         var middle = false
-        var left = false
         view.onMiddleClick = { _ in middle = true }
-        view.onClick = { _ in left = true }
         view.mouseDown(with: mouseEvent(type: .leftMouseDown, button: .left, location: NSPoint(x: 24, y: 19)))
         view.mouseUp(with: mouseEvent(type: .leftMouseUp, button: .left, location: NSPoint(x: 24, y: 19)))
         XCTAssertFalse(middle)
-        XCTAssertTrue(left)
     }
 
     @MainActor

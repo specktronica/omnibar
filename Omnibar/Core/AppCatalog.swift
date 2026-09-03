@@ -145,25 +145,14 @@ final class AppCatalog {
     }
 
     func launch(_ app: CatalogApp) {
-        openAndFocus(url: app.url)
+        NSWorkspace.shared.openApplication(at: app.url, configuration: NSWorkspace.OpenConfiguration())
         recordLaunch(bundleID: app.bundleID)
     }
 
     func launch(bundleID: String) {
         guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else { return }
-        openAndFocus(url: url)
+        NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
         recordLaunch(bundleID: bundleID)
-    }
-
-    private func openAndFocus(url: URL) {
-        let config = NSWorkspace.OpenConfiguration()
-        config.activates = true
-        NSWorkspace.shared.openApplication(at: url, configuration: config) { app, _ in
-            guard let app else { return }
-            Task { @MainActor in
-                WindowActions.activate(app)
-            }
-        }
     }
 
     private func catalogApp(bundleID: String) -> CatalogApp? {

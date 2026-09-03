@@ -191,7 +191,7 @@ final class TaskbarPanel: NSPanel {
         if startMenu.isVisible {
             startMenu.dismiss()
         } else {
-            let button = taskbarView.startButtonFrame()
+            let button = taskbarView.convert(taskbarView.startButtonFrame(), to: nil)
             let rect = convertToScreen(button)
             startMenu.present(from: rect, screen: currentScreen)
         }

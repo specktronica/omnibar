@@ -20,6 +20,7 @@ final class StartMenuPanel: NSPanel {
     private var lastPinIDs: [String] = []
     private var lastRecentIDs: [String] = []
     private var pendingSearchFocus = false
+    private var presentedAt: TimeInterval = 0
 
     init() {
         super.init(
@@ -85,6 +86,7 @@ final class StartMenuPanel: NSPanel {
 
     func present(from startButton: NSRect, screen: NSScreen) {
         startButtonScreenRect = startButton
+        presentedAt = NSApp.currentEvent?.timestamp ?? ProcessInfo.processInfo.systemUptime
         let size = NSSize(width: 640, height: min(520, screen.visibleFrame.height - 80))
         var origin = NSPoint(x: startButton.minX, y: startButton.maxY + 8)
         if origin.x + size.width > screen.frame.maxX - 8 {
@@ -226,19 +228,43 @@ final class StartMenuPanel: NSPanel {
             }
             return event
         }
-        globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
+        globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
+            let timestamp = event.timestamp
             Task { @MainActor in
-                self?.dismiss()
+                guard let self else { return }
+                let decision = StartMenuOutsideClick.decision(
+                    eventWindowIsMenu: false,
+                    inStartButton: false,
+                    isOpeningClick: StartMenuOutsideClick.isOpeningClick(
+                        eventTimestamp: timestamp,
+                        presentedAt: self.presentedAt
+                    )
+                )
+                if case .dismiss = decision {
+                    self.dismiss()
+                }
             }
         }
     }
 
     private func handleClickOutside(_ event: NSEvent) -> NSEvent? {
-        if event.window === self { return event }
-        let inStartButton = isClickInStartButton(event)
-        dismiss()
-        // Swallow the start button click so toggleStartMenu does not reopen the menu.
-        return inStartButton ? nil : event
+        let decision = StartMenuOutsideClick.decision(
+            eventWindowIsMenu: event.window === self,
+            inStartButton: isClickInStartButton(event),
+            isOpeningClick: StartMenuOutsideClick.isOpeningClick(
+                eventTimestamp: event.timestamp,
+                presentedAt: presentedAt
+            )
+        )
+        switch decision {
+        case .pass:
+            return event
+        case .swallow:
+            return nil
+        case .dismiss(let swallow):
+            dismiss()
+            return swallow ? nil : event
+        }
     }
 
     private func isClickInStartButton(_ event: NSEvent) -> Bool {
@@ -282,6 +308,31 @@ final class StartMenuPanel: NSPanel {
         up?.flags = .maskCommand
         down?.post(tap: .cghidEventTap)
         up?.post(tap: .cghidEventTap)
+    }
+}
+
+/// Opening the menu from a non-key taskbar can re-deliver the same mouseDown
+/// to click-outside monitors after `NSApp.activate()`. Ignore that click so
+/// the menu is not dismissed before it appears.
+nonisolated enum StartMenuOutsideClick: Sendable {
+    enum Decision: Equatable {
+        case pass
+        case swallow
+        case dismiss(swallow: Bool)
+    }
+
+    static func isOpeningClick(eventTimestamp: TimeInterval, presentedAt: TimeInterval) -> Bool {
+        eventTimestamp <= presentedAt
+    }
+
+    static func decision(
+        eventWindowIsMenu: Bool,
+        inStartButton: Bool,
+        isOpeningClick: Bool
+    ) -> Decision {
+        if eventWindowIsMenu { return .pass }
+        if isOpeningClick { return inStartButton ? .swallow : .pass }
+        return .dismiss(swallow: inStartButton)
     }
 }
 

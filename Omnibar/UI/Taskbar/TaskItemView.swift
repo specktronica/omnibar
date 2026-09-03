@@ -89,8 +89,9 @@ final class TaskItemView: NSView {
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
+    // `point` is in the superview; `bounds` is local and would steal the Start button.
     override func hitTest(_ point: NSPoint) -> NSView? {
-        bounds.contains(point) ? self : nil
+        frame.contains(point) ? self : nil
     }
 
     override func mouseDown(with event: NSEvent) {

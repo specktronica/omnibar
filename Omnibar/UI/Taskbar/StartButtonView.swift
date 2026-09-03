@@ -75,9 +75,13 @@ final class StartButtonView: NSView {
         pinLogoAnchor()
     }
 
+    // `point` is in the superview, so hit-test `frame` rather than local `bounds`.
     override func hitTest(_ point: NSPoint) -> NSView? {
-        bounds.contains(point) ? self : nil
+        frame.contains(point) ? self : nil
     }
+
+    // Taskbar cannot become key; without this, clicks are dropped once Omnibar is active.
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
