@@ -3,7 +3,7 @@ import Foundation
 
 final class ThumbnailCardView: NSView {
     static let chromeHeight: CGFloat = 28
-    static let contentInset: CGFloat = 8
+    static let contentInset: CGFloat = 6
 
     var onHover: ((WindowInfo) -> Void)?
     var onRaise: ((WindowInfo) -> Void)?
@@ -25,7 +25,9 @@ final class ThumbnailCardView: NSView {
     private let separator = ChromeSeparator()
 
     static func preferredSize(for size: CGFloat) -> NSSize {
-        NSSize(width: size, height: size * 0.66 + chromeHeight + contentInset)
+        let imageWidth = max(1, size - contentInset * 2)
+        let imageHeight = imageWidth * (9.0 / 16.0)
+        return NSSize(width: size, height: imageHeight + chromeHeight + contentInset)
     }
 
     override init(frame frameRect: NSRect) {

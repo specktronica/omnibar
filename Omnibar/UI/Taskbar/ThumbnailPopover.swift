@@ -4,6 +4,8 @@ import Foundation
 final class ThumbnailPopover: NSPanel {
     private static let maxVisibleCards = 3
     private static let cardGap: CGFloat = 8
+    private static let verticalInset: CGFloat = 4
+    fileprivate static let horizontalInset: CGFloat = 44
 
     private let effect = ThumbnailRootView()
     private let cards: [ThumbnailCardView] = (0..<maxVisibleCards).map { _ in ThumbnailCardView() }
@@ -97,9 +99,8 @@ final class ThumbnailPopover: NSPanel {
         let settings = SettingsStore.shared.settings
         thumbnailSize = CGFloat(settings.thumbnailSize)
         let cardSize = ThumbnailCardView.preferredSize(for: thumbnailSize)
-        let inset = ThumbnailCardView.contentInset
-        let width = inset + CGFloat(visible) * cardSize.width + CGFloat(max(0, visible - 1)) * Self.cardGap + inset
-        let height = cardSize.height + inset * 2
+        let width = Self.horizontalInset + CGFloat(visible) * cardSize.width + CGFloat(max(0, visible - 1)) * Self.cardGap + Self.horizontalInset
+        let height = cardSize.height + Self.verticalInset * 2
         var frame = NSRect(
             x: anchor.midX - width / 2,
             y: anchor.maxY + 8,
@@ -176,7 +177,6 @@ final class ThumbnailPopover: NSPanel {
         guard let item else { return }
         let settings = SettingsStore.shared.settings
         let cardSize = ThumbnailCardView.preferredSize(for: thumbnailSize)
-        let inset = ThumbnailCardView.contentInset
         let visible = visibleCount
         let showTitle = settings.showTitleInThumbnail
         let option = NSEvent.modifierFlags.contains(.option)
@@ -187,8 +187,8 @@ final class ThumbnailPopover: NSPanel {
                 card.isHidden = false
                 card.optionHeld = option
                 card.frame = NSRect(
-                    x: inset + CGFloat(index) * (cardSize.width + Self.cardGap),
-                    y: inset,
+                    x: Self.horizontalInset + CGFloat(index) * (cardSize.width + Self.cardGap),
+                    y: Self.verticalInset,
                     width: cardSize.width,
                     height: cardSize.height
                 )
@@ -322,10 +322,11 @@ private final class ReelOverlayView: NSView {
     override func layout() {
         super.layout()
         let size = ReelArrowButton.diameter
-        let inset: CGFloat = 8
+        let gutter = ThumbnailPopover.horizontalInset
         let y = (bounds.height - size) / 2
-        leftButton.frame = NSRect(x: inset, y: y, width: size, height: size)
-        rightButton.frame = NSRect(x: bounds.width - inset - size, y: y, width: size, height: size)
+        let x = (gutter - size) / 2
+        leftButton.frame = NSRect(x: x, y: y, width: size, height: size)
+        rightButton.frame = NSRect(x: bounds.width - gutter + x, y: y, width: size, height: size)
     }
 }
 
