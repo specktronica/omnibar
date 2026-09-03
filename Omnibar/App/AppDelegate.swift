@@ -73,6 +73,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func startIfPossible() {
         PermissionsManager.shared.refresh()
         guard PermissionsManager.shared.accessibilityTrusted else { return }
+        guard !OnboardingWindow.isShowing else { return }
+        guard !AppRelaunch.isInProgress else { return }
         guard !started else { return }
         started = true
         WindowTracker.shared.start()

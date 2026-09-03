@@ -28,7 +28,7 @@ final class ThumbnailService {
         if let entry = cache[windowID], Date().timeIntervalSince(entry.date) < 0.35 {
             return entry.image
         }
-        guard PermissionsManager.shared.screenRecordingTrusted || CGPreflightScreenCaptureAccess() else {
+        guard PermissionsManager.shared.screenRecordingTrusted else {
             return nil
         }
         guard !inFlight.contains(windowID) else { return cache[windowID]?.image }

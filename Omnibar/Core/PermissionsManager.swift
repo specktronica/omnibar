@@ -3,18 +3,43 @@ import ApplicationServices
 import Foundation
 import Observation
 
+/// Screen Recording TCC vs what ScreenCaptureKit can actually do in this process.
+///
+/// `CGPreflightScreenCaptureAccess()` becomes true as soon as the user flips the
+/// System Settings toggle, but capture APIs stay inert until relaunch. A grant
+/// that appears after this process started is therefore `pendingRestart`, not
+/// `trusted`.
+enum ScreenRecordingAccess: Equatable {
+    case denied
+    case pendingRestart
+    case trusted
+
+    static func resolve(trustedAtLaunch: Bool, preflight: Bool) -> ScreenRecordingAccess {
+        if !preflight { return .denied }
+        if !trustedAtLaunch { return .pendingRestart }
+        return .trusted
+    }
+}
+
 @Observable
 final class PermissionsManager {
     static let shared = PermissionsManager()
 
     private(set) var accessibilityTrusted: Bool
+    /// True only when Screen Recording was already granted at process start.
     private(set) var screenRecordingTrusted: Bool
+    private(set) var screenRecordingNeedsRestart: Bool
 
+    private let screenRecordingTrustedAtLaunch: Bool
     private var pollTimer: Timer?
 
     init() {
         accessibilityTrusted = AXIsProcessTrusted()
-        screenRecordingTrusted = CGPreflightScreenCaptureAccess()
+        let preflight = CGPreflightScreenCaptureAccess()
+        screenRecordingTrustedAtLaunch = preflight
+        let access = ScreenRecordingAccess.resolve(trustedAtLaunch: preflight, preflight: preflight)
+        screenRecordingTrusted = access == .trusted
+        screenRecordingNeedsRestart = access == .pendingRestart
         NotificationCenter.default.addObserver(
             forName: NSApplication.didBecomeActiveNotification,
             object: nil,
@@ -40,10 +65,18 @@ final class PermissionsManager {
 
     func refresh() {
         let ax = Self.readAccessibilityTrusted()
-        let screen = CGPreflightScreenCaptureAccess()
-        let changed = ax != accessibilityTrusted || screen != screenRecordingTrusted
+        let access = ScreenRecordingAccess.resolve(
+            trustedAtLaunch: screenRecordingTrustedAtLaunch,
+            preflight: CGPreflightScreenCaptureAccess()
+        )
+        let screenTrusted = access == .trusted
+        let needsRestart = access == .pendingRestart
+        let changed = ax != accessibilityTrusted
+            || screenTrusted != screenRecordingTrusted
+            || needsRestart != screenRecordingNeedsRestart
         accessibilityTrusted = ax
-        screenRecordingTrusted = screen
+        screenRecordingTrusted = screenTrusted
+        screenRecordingNeedsRestart = needsRestart
         if changed {
             NotificationCenter.default.post(name: .omnibarPermissionsDidChange, object: nil)
         }
@@ -76,9 +109,9 @@ final class PermissionsManager {
 
     @discardableResult
     func promptScreenRecording() -> Bool {
-        let granted = CGRequestScreenCaptureAccess()
-        screenRecordingTrusted = granted || CGPreflightScreenCaptureAccess()
+        _ = CGRequestScreenCaptureAccess()
         startPolling()
+        refresh()
         return screenRecordingTrusted
     }
 

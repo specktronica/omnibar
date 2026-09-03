@@ -63,6 +63,7 @@ enum OnboardingWindow {
         PermissionsManager.shared.stopPolling()
         beginReopenSuppression()
         NSApp.setActivationPolicy(.accessory)
+        if AppRelaunch.isInProgress { return }
         if PermissionsManager.shared.accessibilityTrusted {
             NotificationCenter.default.post(name: .omnibarPermissionsDidChange, object: nil)
         }
@@ -166,11 +167,15 @@ struct PermissionsView: View {
             Spacer()
             HStack {
                 Spacer()
-                Button("Continue") {
-                    OnboardingWindow.dismiss()
+                Button(primaryTitle) {
+                    if permissions.screenRecordingNeedsRestart {
+                        AppRelaunch.perform()
+                    } else {
+                        OnboardingWindow.dismiss()
+                    }
                 }
                 .keyboardShortcut(.defaultAction)
-                .disabled(!permissions.accessibilityTrusted)
+                .disabled(primaryDisabled)
             }
         }
         .padding(24)
@@ -181,6 +186,14 @@ struct PermissionsView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             PermissionsManager.shared.refresh()
         }
+    }
+
+    private var primaryTitle: String {
+        permissions.screenRecordingNeedsRestart ? "Restart" : "Continue"
+    }
+
+    private var primaryDisabled: Bool {
+        !permissions.screenRecordingNeedsRestart && !permissions.accessibilityTrusted
     }
 
     @ViewBuilder

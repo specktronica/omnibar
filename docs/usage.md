@@ -4,7 +4,7 @@ Omnibar is a bottom-of-screen taskbar. It lists windows on the current Space, op
 
 ## First launch
 
-If Accessibility is not granted, an onboarding window appears. Continue is disabled until Accessibility is on. Screen Recording and “Hide the macOS Dock” are optional on that screen.
+If Accessibility is not granted, an onboarding window appears. Continue is disabled until Accessibility is on. The taskbar appears only after you click Continue (or close the window). Screen Recording and “Hide the macOS Dock” are optional on that screen. Granting Screen Recording during that first launch does not take effect until Omnibar restarts: Continue becomes Restart, and the Screen Recording row stays unmarked until the new process starts.
 
 After that, Omnibar lives in the menu bar. The extra’s menu is **Settings…** (⌘,) and **Quit Omnibar** (⌘Q). Clicking the app again while it is already running opens Settings, as long as Accessibility is granted.
 
