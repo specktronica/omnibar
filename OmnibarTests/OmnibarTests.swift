@@ -42,6 +42,63 @@ final class OrderStoreTests: XCTestCase {
     }
 }
 
+final class DockStripHidingTests: XCTestCase {
+    func testIgnoresWallpaperWindows() {
+        XCTAssertFalse(DockStripHiding.isStrip(name: "Wallpaper-", layer: DockStripHiding.dockWindowLevel))
+        XCTAssertFalse(DockStripHiding.isStrip(
+            name: "Wallpaper-EC12A353-7677-45AC-841C-92E9F356958E",
+            layer: DockStripHiding.dockWindowLevel
+        ))
+    }
+
+    func testMatchesDockStripLayer() {
+        XCTAssertTrue(DockStripHiding.isStrip(name: "Dock", layer: DockStripHiding.dockWindowLevel))
+        XCTAssertTrue(DockStripHiding.isStrip(name: "", layer: DockStripHiding.dockWindowLevel))
+        XCTAssertFalse(DockStripHiding.isStrip(name: "Dock", layer: 18))
+        XCTAssertFalse(DockStripHiding.isStrip(name: "", layer: 18))
+    }
+
+    func testStripWindowIDsFiltersByPIDAndLayer() {
+        let dockPID: pid_t = 39252
+        let windows: [[String: Any]] = [
+            [
+                kCGWindowOwnerPID as String: NSNumber(value: dockPID),
+                kCGWindowName as String: "Dock",
+                kCGWindowLayer as String: NSNumber(value: DockStripHiding.dockWindowLevel),
+                kCGWindowNumber as String: NSNumber(value: 100)
+            ],
+            [
+                kCGWindowOwnerPID as String: NSNumber(value: dockPID),
+                kCGWindowName as String: "",
+                kCGWindowLayer as String: NSNumber(value: DockStripHiding.dockWindowLevel),
+                kCGWindowNumber as String: NSNumber(value: 101)
+            ],
+            [
+                kCGWindowOwnerPID as String: NSNumber(value: dockPID),
+                kCGWindowName as String: "",
+                kCGWindowLayer as String: NSNumber(value: 18),
+                kCGWindowNumber as String: NSNumber(value: 102)
+            ],
+            [
+                kCGWindowOwnerPID as String: NSNumber(value: dockPID),
+                kCGWindowName as String: "Wallpaper-",
+                kCGWindowLayer as String: NSNumber(value: DockStripHiding.dockWindowLevel),
+                kCGWindowNumber as String: NSNumber(value: 103)
+            ],
+            [
+                kCGWindowOwnerPID as String: NSNumber(value: 1),
+                kCGWindowName as String: "Dock",
+                kCGWindowLayer as String: NSNumber(value: DockStripHiding.dockWindowLevel),
+                kCGWindowNumber as String: NSNumber(value: 104)
+            ]
+        ]
+        XCTAssertEqual(
+            DockStripHiding.stripWindowIDs(from: windows, dockPID: dockPID),
+            [CGWindowID(100), CGWindowID(101)]
+        )
+    }
+}
+
 final class SettingsTests: XCTestCase {
     @MainActor
     func testRoundTrip() throws {

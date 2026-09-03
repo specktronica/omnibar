@@ -22,12 +22,16 @@ nonisolated final class CGSBridge: SpacesProviding, Sendable {
     private typealias CopySpacesForWindowsProc = @convention(c) (CGSConnectionID, Int32, CFArray) -> Unmanaged<CFArray>?
     private typealias ManagedDisplayGetCurrentSpaceProc = @convention(c) (CGSConnectionID, CFString) -> CGSSpaceID
     private typealias SpaceGetTypeProc = @convention(c) (CGSConnectionID, CGSSpaceID) -> Int32
+    private typealias SetWindowLevelProc = @convention(c) (CGSConnectionID, UInt32, Int32) -> Int32
+    private typealias GetWindowLevelProc = @convention(c) (CGSConnectionID, UInt32, UnsafeMutablePointer<Int32>) -> Int32
 
     private let mainConnection: MainConnectionProc?
     private let copyManagedDisplaySpaces: CopyManagedDisplaySpacesProc?
     private let copySpacesForWindows: CopySpacesForWindowsProc?
     private let managedDisplayGetCurrentSpace: ManagedDisplayGetCurrentSpaceProc?
     private let spaceGetType: SpaceGetTypeProc?
+    private let setWindowLevelProc: SetWindowLevelProc?
+    private let getWindowLevelProc: GetWindowLevelProc?
     private let connection: CGSConnectionID
 
     private static let allSpacesSelector: Int32 = 7
@@ -49,6 +53,10 @@ nonisolated final class CGSBridge: SpacesProviding, Sendable {
             ?? load("SLSManagedDisplayGetCurrentSpace", as: ManagedDisplayGetCurrentSpaceProc.self)
         spaceGetType = load("CGSSpaceGetType", as: SpaceGetTypeProc.self)
             ?? load("SLSSpaceGetType", as: SpaceGetTypeProc.self)
+        setWindowLevelProc = load("CGSSetWindowLevel", as: SetWindowLevelProc.self)
+            ?? load("SLSSetWindowLevel", as: SetWindowLevelProc.self)
+        getWindowLevelProc = load("CGSGetWindowLevel", as: GetWindowLevelProc.self)
+            ?? load("SLSGetWindowLevel", as: GetWindowLevelProc.self)
         connection = mainConnection?() ?? 0
     }
 
@@ -122,6 +130,19 @@ nonisolated final class CGSBridge: SpacesProviding, Sendable {
             }
         }
         return result
+    }
+
+    func windowLevel(of id: CGWindowID) -> Int32? {
+        guard let proc = getWindowLevelProc else { return nil }
+        var level: Int32 = 0
+        guard proc(connection, id, &level) == 0 else { return nil }
+        return level
+    }
+
+    @discardableResult
+    func setWindowLevel(_ id: CGWindowID, level: Int32) -> Bool {
+        guard let proc = setWindowLevelProc else { return false }
+        return proc(connection, id, level) == 0
     }
 
     func spaces(forWindowIDs ids: [CGWindowID]) -> [CGWindowID: [UInt64]] {

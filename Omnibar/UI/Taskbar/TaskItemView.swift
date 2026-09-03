@@ -156,12 +156,8 @@ final class TaskItemView: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        let active = item.isActive
         let dim = settings.indicateMinimizedHidden && item.isMinimizedOrHidden
-        if active {
-            NSColor.controlBackgroundColor.withAlphaComponent(0.95).setFill()
-            NSBezierPath(roundedRect: bounds.insetBy(dx: 2, dy: 3), xRadius: 8, yRadius: 8).fill()
-        } else if hovered {
+        if hovered {
             NSColor.labelColor.withAlphaComponent(0.10).setFill()
             NSBezierPath(roundedRect: bounds.insetBy(dx: 2, dy: 3), xRadius: 8, yRadius: 8).fill()
         }
@@ -289,6 +285,8 @@ private final class WindowDotsView: NSView {
     static let diameter: CGFloat = 4
     static let gap: CGFloat = 3
     static let bandHeight: CGFloat = 6
+    static let maxExactDots = 4
+    static let stackOffset: CGFloat = diameter / 2
 
     var count: Int = 0 {
         didSet {
@@ -310,26 +308,15 @@ private final class WindowDotsView: NSView {
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
     override func draw(_ dirtyRect: NSRect) {
-        let shown = min(count, 3)
-        guard shown >= 1 else { return }
-        if shown == 1 {
+        guard count >= 1 else { return }
+        if count == 1 {
             drawRunningMark(active: activeIndex != nil)
             return
         }
-        let diameter = Self.diameter
-        let gap = Self.gap
-        let total = CGFloat(shown) * diameter + CGFloat(shown - 1) * gap
-        var x = (bounds.width - total) / 2
-        let y = (bounds.height - diameter) / 2
-        let activeShown: Int? = {
-            guard let activeIndex else { return nil }
-            if activeIndex < shown { return activeIndex }
-            return shown - 1
-        }()
-        for index in 0..<shown {
-            (index == activeShown ? NSColor.systemBlue : NSColor.secondaryLabelColor).setFill()
-            NSBezierPath(ovalIn: CGRect(x: x, y: y, width: diameter, height: diameter)).fill()
-            x += diameter + gap
+        if count > Self.maxExactDots {
+            drawStackedDots()
+        } else {
+            drawSpacedDots()
         }
     }
 
@@ -345,6 +332,61 @@ private final class WindowDotsView: NSView {
         let color = NSColor.systemBlue.withAlphaComponent(active ? 1 : 0.55)
         color.setFill()
         NSBezierPath(roundedRect: rect, xRadius: height / 2, yRadius: height / 2).fill()
+    }
+
+    private func drawSpacedDots() {
+        let diameter = Self.diameter
+        let gap = Self.gap
+        let total = CGFloat(count) * diameter + CGFloat(count - 1) * gap
+        var x = (bounds.width - total) / 2
+        let y = (bounds.height - diameter) / 2
+        for index in 0..<count {
+            fillDot(
+                CGRect(x: x, y: y, width: diameter, height: diameter),
+                color: index == activeIndex ? NSColor.systemBlue : NSColor.secondaryLabelColor
+            )
+            x += diameter + gap
+        }
+    }
+
+    private func drawStackedDots() {
+        let diameter = Self.diameter
+        let offset = Self.stackOffset
+        let outline: CGFloat = 1
+        let maxFit = max(2, Int(floor((bounds.width - diameter - outline * 2) / offset)) + 1)
+        let shown = min(count, maxFit)
+        let total = diameter + CGFloat(shown - 1) * offset
+        let startX = (bounds.width - total) / 2
+        let y = (bounds.height - diameter) / 2
+        let rects = (0..<shown).map { index in
+            CGRect(x: startX + CGFloat(index) * offset, y: y, width: diameter, height: diameter)
+        }
+        let activeShown: Int? = {
+            guard let activeIndex else { return nil }
+            if activeIndex < shown { return activeIndex }
+            return shown - 1
+        }()
+        for (index, rect) in rects.enumerated() where index != activeShown {
+            fillDot(rect, color: NSColor.secondaryLabelColor)
+        }
+        if let activeShown {
+            fillDot(rects[activeShown], color: NSColor.systemBlue)
+        }
+        NSColor.black.setStroke()
+        for rect in rects {
+            strokeDot(rect)
+        }
+    }
+
+    private func fillDot(_ rect: CGRect, color: NSColor) {
+        color.setFill()
+        NSBezierPath(ovalIn: rect).fill()
+    }
+
+    private func strokeDot(_ rect: CGRect) {
+        let path = NSBezierPath(ovalIn: rect.insetBy(dx: -0.5, dy: -0.5))
+        path.lineWidth = 1
+        path.stroke()
     }
 }
 

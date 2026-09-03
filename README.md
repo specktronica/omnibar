@@ -48,11 +48,12 @@ Launch at login is available in Settings → General (`SMAppService`).
 - Spaces: show windows on the current Space; hide the bar in fullscreen Spaces
 - Drag to reorder, group by application, icons-only mode
 - Multi-monitor: one bar per screen, main-display-only, hide per display
-- Auto-resize overlapping windows, fully hide Dock (reverted on quit), auto-hide the bar
+- Auto-resize overlapping windows, fully hide Dock including Mission Control (reverted on quit), auto-hide the bar
 
 ## Known limitations
 
 - Space membership and fullscreen detection use private SkyLight / CGS symbols (`CGSCopyManagedDisplaySpaces`, `CGSCopySpacesForWindows`, and related). Those can change with macOS releases.
+- Fully hiding the Dock in Mission Control uses `CGSSetWindowLevel` on Dock strip windows. Autohide delay alone cannot hide that strip; it is part of Mission Control's overlay.
 - Launchpad was removed on some macOS 26 installs. If Launchpad cannot be opened, the Start button falls back to Spotlight.
 - Ad-hoc signed local builds are not notarized and are not sandboxed. Accessibility and screen capture need the unsandboxed app.
 - Window IDs are not stable across logout. Pin order is persisted; in-session window order is not.

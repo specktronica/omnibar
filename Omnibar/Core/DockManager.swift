@@ -1,5 +1,30 @@
 import AppKit
+import CoreGraphics
 import Foundation
+
+nonisolated enum DockStripHiding: Sendable {
+    static let dockWindowLevel = Int32(CGWindowLevelForKey(.dockWindow))
+    static let buriedLevel = Int32(CGWindowLevelForKey(.desktopWindow)) - 2
+
+    static func isStrip(name: String, layer: Int32) -> Bool {
+        if name.hasPrefix("Wallpaper") { return false }
+        return layer == dockWindowLevel
+    }
+
+    static func stripWindowIDs(from windows: [[String: Any]], dockPID: pid_t) -> [CGWindowID] {
+        var ids: [CGWindowID] = []
+        for info in windows {
+            let pid = pid_t((info[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value ?? 0)
+            guard pid == dockPID else { continue }
+            let name = info[kCGWindowName as String] as? String ?? ""
+            let layer = (info[kCGWindowLayer as String] as? NSNumber)?.int32Value ?? 0
+            guard isStrip(name: name, layer: layer) else { continue }
+            guard let id = (info[kCGWindowNumber as String] as? NSNumber)?.uint32Value else { continue }
+            ids.append(id)
+        }
+        return ids
+    }
+}
 
 final class DockManager {
     static let shared = DockManager()
@@ -8,6 +33,8 @@ final class DockManager {
     private let backupKey = "omnibar.dock.backup.v1"
     private var appliedFullyHidden = false
     private var isMutating = false
+    private var hideTimer: Timer?
+    private var buriedLevels: [CGWindowID: Int32] = [:]
 
     func applyFromSettings() {
         guard !isMutating else { return }
@@ -26,11 +53,13 @@ final class DockManager {
         writeDock("autohide-time-modifier", 0.0)
         restartDock()
         appliedFullyHidden = true
+        startMissionControlHiding()
     }
 
     func revertIfNeeded() {
         isMutating = true
         defer { isMutating = false }
+        stopMissionControlHiding()
         guard appliedFullyHidden || UserDefaults.standard.dictionary(forKey: backupKey) != nil else { return }
         if let backup = UserDefaults.standard.dictionary(forKey: backupKey) {
             if let autohide = backup["autohide"] as? Bool {
@@ -48,6 +77,53 @@ final class DockManager {
         }
         restartDock()
         appliedFullyHidden = false
+    }
+
+    // Mission Control still composites the Dock at dock-window level even with a huge autohide delay.
+    private func startMissionControlHiding() {
+        stopMissionControlHiding()
+        hideTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.hideDockStripIfNeeded()
+            }
+        }
+        hideTimer?.tolerance = 0.02
+        hideDockStripIfNeeded()
+    }
+
+    private func stopMissionControlHiding() {
+        hideTimer?.invalidate()
+        hideTimer = nil
+        restoreBuriedDockWindows()
+    }
+
+    private func hideDockStripIfNeeded() {
+        guard appliedFullyHidden else { return }
+        guard let dockPID = NSWorkspace.shared.runningApplications
+            .first(where: { $0.bundleIdentifier == "com.apple.dock" })?
+            .processIdentifier else {
+            restoreBuriedDockWindows()
+            return
+        }
+        let list = CGWindowListCopyWindowInfo(.optionOnScreenOnly, kCGNullWindowID) as? [[String: Any]] ?? []
+        let strip = Set(DockStripHiding.stripWindowIDs(from: list, dockPID: dockPID))
+        for id in strip {
+            if buriedLevels[id] == nil {
+                buriedLevels[id] = CGSBridge.shared.windowLevel(of: id) ?? DockStripHiding.dockWindowLevel
+            }
+            CGSBridge.shared.setWindowLevel(id, level: DockStripHiding.buriedLevel)
+        }
+        for (id, original) in buriedLevels where !strip.contains(id) {
+            CGSBridge.shared.setWindowLevel(id, level: original)
+            buriedLevels.removeValue(forKey: id)
+        }
+    }
+
+    private func restoreBuriedDockWindows() {
+        for (id, original) in buriedLevels {
+            CGSBridge.shared.setWindowLevel(id, level: original)
+        }
+        buriedLevels.removeAll()
     }
 
     private func backupIfNeeded() {

@@ -58,65 +58,68 @@ enum BrandIcon {
         return image
     }
 
+    /// Four equal circles packed in a larger circle; center curvilinear diamond filled.
     nonisolated private static func drawMenuBarGlyph(in rect: NSRect) {
-        let inset = max(1 as CGFloat, rect.width * 0.06)
+        let inset = max(1 as CGFloat, rect.width * 0.07)
         let bounds = rect.insetBy(dx: inset, dy: inset)
         let cx = bounds.midX
         let cy = bounds.midY
-        let radius = min(bounds.width, bounds.height) / 2
+        let outerR = min(bounds.width, bounds.height) / 2
+        let root2 = CGFloat(2).squareRoot()
+        let innerR = outerR / (1 + root2)
+        let offset = innerR * root2
 
-        let path = NSBezierPath()
-        path.windingRule = .evenOdd
-        path.appendOval(
-            in: NSRect(x: cx - radius, y: cy - radius, width: radius * 2, height: radius * 2)
-        )
+        NSColor.black.set()
 
-        // Brand mark: four color seams on the diagonals and a 4-pointed star center.
-        let rMin = radius * (42.0 / 225.0)
-        let rMax = radius * (89.0 / 225.0)
-        let star = NSBezierPath()
-        let steps = 64
-        for i in 0..<steps {
-            let theta = CGFloat(i) / CGFloat(steps) * 2 * CGFloat.pi
-            let r = rMin + (rMax - rMin) * abs(sin(2 * theta))
-            let point = NSPoint(x: cx + r * cos(theta), y: cy + r * sin(theta))
-            if i == 0 {
-                star.move(to: point)
-            } else {
-                star.line(to: point)
-            }
-        }
-        star.close()
-        path.append(star)
+        let center = NSBezierPath()
+        addInnerArc(to: center, cx: cx + offset, cy: cy, radius: innerR, from: 225, to: 135, clockwise: true)
+        addInnerArc(to: center, cx: cx, cy: cy + offset, radius: innerR, from: 315, to: 225, clockwise: true)
+        addInnerArc(to: center, cx: cx - offset, cy: cy, radius: innerR, from: 45, to: 315, clockwise: true)
+        addInnerArc(to: center, cx: cx, cy: cy - offset, radius: innerR, from: 135, to: 45, clockwise: true)
+        center.close()
+        center.fill()
 
-        let gap = max(1.15 as CGFloat, radius * 0.14)
-        path.append(bar(cx: cx, cy: cy, length: radius * 2, width: gap, angle: .pi / 4))
-        path.append(bar(cx: cx, cy: cy, length: radius * 2, width: gap, angle: -.pi / 4))
-
-        NSColor.black.setFill()
-        path.fill()
+        let lineWidth = max(1 as CGFloat, outerR * 0.13)
+        strokeCircle(cx: cx, cy: cy, radius: outerR, lineWidth: lineWidth)
+        strokeCircle(cx: cx + offset, cy: cy, radius: innerR, lineWidth: lineWidth)
+        strokeCircle(cx: cx - offset, cy: cy, radius: innerR, lineWidth: lineWidth)
+        strokeCircle(cx: cx, cy: cy + offset, radius: innerR, lineWidth: lineWidth)
+        strokeCircle(cx: cx, cy: cy - offset, radius: innerR, lineWidth: lineWidth)
     }
 
-    nonisolated private static func bar(
+    nonisolated private static func strokeCircle(cx: CGFloat, cy: CGFloat, radius: CGFloat, lineWidth: CGFloat) {
+        let path = NSBezierPath(
+            ovalIn: NSRect(x: cx - radius, y: cy - radius, width: radius * 2, height: radius * 2)
+        )
+        path.lineWidth = lineWidth
+        path.lineJoinStyle = .round
+        path.stroke()
+    }
+
+    nonisolated private static func addInnerArc(
+        to path: NSBezierPath,
         cx: CGFloat,
         cy: CGFloat,
-        length: CGFloat,
-        width: CGFloat,
-        angle: CGFloat
-    ) -> NSBezierPath {
-        let ca = cos(angle)
-        let sa = sin(angle)
-        let hl = length / 2
-        let hw = width / 2
-        func corner(_ x: CGFloat, _ y: CGFloat) -> NSPoint {
-            NSPoint(x: cx + x * ca - y * sa, y: cy + x * sa + y * ca)
+        radius: CGFloat,
+        from startDeg: CGFloat,
+        to endDeg: CGFloat,
+        clockwise: Bool
+    ) {
+        let start = startDeg * .pi / 180
+        let end = endDeg * .pi / 180
+        var delta = end - start
+        if clockwise, delta > 0 { delta -= 2 * .pi }
+        if !clockwise, delta < 0 { delta += 2 * .pi }
+        let steps = 20
+        for i in 0...steps {
+            let t = CGFloat(i) / CGFloat(steps)
+            let angle = start + delta * t
+            let point = NSPoint(x: cx + radius * cos(angle), y: cy + radius * sin(angle))
+            if path.elementCount == 0 {
+                path.move(to: point)
+            } else {
+                path.line(to: point)
+            }
         }
-        let path = NSBezierPath()
-        path.move(to: corner(-hl, -hw))
-        path.line(to: corner(hl, -hw))
-        path.line(to: corner(hl, hw))
-        path.line(to: corner(-hl, hw))
-        path.close()
-        return path
     }
 }

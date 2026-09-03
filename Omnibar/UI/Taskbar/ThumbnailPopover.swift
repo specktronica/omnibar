@@ -5,7 +5,8 @@ final class ThumbnailPopover: NSPanel {
     private static let maxVisibleCards = 3
     private static let cardGap: CGFloat = 8
     private static let verticalInset: CGFloat = 4
-    fileprivate static let horizontalInset: CGFloat = 44
+    private static let compactHorizontalInset: CGFloat = 4
+    fileprivate static let pagingHorizontalInset: CGFloat = 44
     private static let hoverFocusDelay: TimeInterval = 0.12
 
     private let effect = ThumbnailRootView()
@@ -30,6 +31,10 @@ final class ThumbnailPopover: NSPanel {
     private var hoverFocusCommitted = false
 
     private var visibleCount: Int { min(Self.maxVisibleCards, windows.count) }
+    private var needsPaging: Bool { windows.count > Self.maxVisibleCards }
+    private var horizontalInset: CGFloat {
+        needsPaging ? Self.pagingHorizontalInset : Self.compactHorizontalInset
+    }
 
     init() {
         super.init(
@@ -121,7 +126,7 @@ final class ThumbnailPopover: NSPanel {
         let settings = SettingsStore.shared.settings
         thumbnailSize = CGFloat(settings.thumbnailSize)
         let cardSize = ThumbnailCardView.preferredSize(for: thumbnailSize)
-        let width = Self.horizontalInset + CGFloat(visible) * cardSize.width + CGFloat(max(0, visible - 1)) * Self.cardGap + Self.horizontalInset
+        let width = horizontalInset + CGFloat(visible) * cardSize.width + CGFloat(max(0, visible - 1)) * Self.cardGap + horizontalInset
         let height = cardSize.height + Self.verticalInset * 2
         var frame = NSRect(
             x: anchor.midX - width / 2,
@@ -169,6 +174,17 @@ final class ThumbnailPopover: NSPanel {
     override func mouseEntered(with event: NSEvent) {
         isHovered = true
         reel.setVisible(windows.count > 3)
+        NSCursor.arrow.set()
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        NSCursor.arrow.set()
+        _ = event
+    }
+
+    override func cursorUpdate(with event: NSEvent) {
+        NSCursor.arrow.set()
+        _ = event
     }
 
     override func mouseExited(with event: NSEvent) {
@@ -271,7 +287,7 @@ final class ThumbnailPopover: NSPanel {
                 card.isHidden = false
                 card.optionHeld = option
                 card.frame = NSRect(
-                    x: Self.horizontalInset + CGFloat(index) * (cardSize.width + Self.cardGap),
+                    x: horizontalInset + CGFloat(index) * (cardSize.width + Self.cardGap),
                     y: Self.verticalInset,
                     width: cardSize.width,
                     height: cardSize.height
@@ -309,7 +325,7 @@ final class ThumbnailPopover: NSPanel {
         if let tracking { contentView?.removeTrackingArea(tracking) }
         let area = NSTrackingArea(
             rect: contentView?.bounds ?? .zero,
-            options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+            options: [.mouseEnteredAndExited, .mouseMoved, .cursorUpdate, .activeAlways, .inVisibleRect],
             owner: self,
             userInfo: nil
         )
@@ -351,6 +367,10 @@ final class ThumbnailPopover: NSPanel {
 
 private final class ThumbnailRootView: NSVisualEffectView {
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override func resetCursorRects() {
+        addCursorRect(bounds, cursor: .arrow)
+    }
 }
 
 private final class ReelOverlayView: NSView {
@@ -403,10 +423,14 @@ private final class ReelOverlayView: NSView {
         return nil
     }
 
+    override func resetCursorRects() {
+        addCursorRect(bounds, cursor: .arrow)
+    }
+
     override func layout() {
         super.layout()
         let size = ReelArrowButton.diameter
-        let gutter = ThumbnailPopover.horizontalInset
+        let gutter = ThumbnailPopover.pagingHorizontalInset
         let y = (bounds.height - size) / 2
         let x = (gutter - size) / 2
         leftButton.frame = NSRect(x: x, y: y, width: size, height: size)
@@ -462,19 +486,30 @@ private final class ReelArrowButton: NSView {
         trackingAreas.forEach(removeTrackingArea)
         addTrackingArea(NSTrackingArea(
             rect: bounds,
-            options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+            options: [.mouseEnteredAndExited, .mouseMoved, .cursorUpdate, .activeAlways, .inVisibleRect],
             owner: self,
             userInfo: nil
         ))
     }
 
     override func resetCursorRects() {
-        addCursorRect(bounds, cursor: .pointingHand)
+        addCursorRect(bounds, cursor: .arrow)
+    }
+
+    override func cursorUpdate(with event: NSEvent) {
+        NSCursor.arrow.set()
+        _ = event
     }
 
     override func mouseEntered(with event: NSEvent) {
         hovered = true
         needsDisplay = true
+        NSCursor.arrow.set()
+        _ = event
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        NSCursor.arrow.set()
         _ = event
     }
 
