@@ -47,6 +47,10 @@ final class TaskbarView: NSView {
         startButton.frame
     }
 
+    func spinStartButton(opening: Bool) {
+        startButton.spin(opening: opening)
+    }
+
     func view(forItemID id: String) -> NSView? {
         itemViews.first { $0.item.id == id }
     }
@@ -55,7 +59,10 @@ final class TaskbarView: NSView {
         super.layout()
         let height = bounds.height
         let startWidth = max(height, 36)
-        startButton.frame = CGRect(x: 4, y: 0, width: startWidth, height: height)
+        let startFrame = CGRect(x: 4, y: 0, width: startWidth, height: height)
+        if startButton.frame != startFrame {
+            startButton.frame = startFrame
+        }
         let dividerInset: CGFloat = 8
         startDivider.frame = CGRect(
             x: startButton.frame.maxX + 4,

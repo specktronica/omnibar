@@ -121,10 +121,9 @@ final class TaskItemView: NSView {
         let padding: CGFloat = 8
         let showRunningMark = dotsView.count > 0
         let compact = settings.compactItems || item.isPinnedLauncher
+        let icon = Self.iconLength(tileHeight: bounds.height)
         if compact {
             titleView.isHidden = true
-            let edge: CGFloat = 6
-            let icon = max(16, min(bounds.height - edge * 2, 36))
             iconView.frame = CGRect(
                 x: (bounds.width - icon) / 2,
                 y: (bounds.height - icon) / 2,
@@ -146,20 +145,69 @@ final class TaskItemView: NSView {
         } else {
             titleView.isHidden = false
             dotsView.isHidden = true
-            let icon = max(16, min(bounds.height - 12, 36))
             iconView.frame = CGRect(x: padding, y: (bounds.height - icon) / 2, width: icon, height: icon)
             let x = iconView.frame.maxX + 6
             titleView.frame = CGRect(x: x, y: 0, width: max(0, bounds.width - x - padding), height: bounds.height)
         }
-        badgeView.frame = CGRect(x: iconView.frame.maxX - 8, y: iconView.frame.maxY - 8, width: 14, height: 14)
+        let badge = Self.badgeLength(iconLength: icon)
+        let badgeInset = badge * (8 / 14)
+        badgeView.frame = CGRect(
+            x: iconView.frame.maxX - badgeInset,
+            y: iconView.frame.maxY - badgeInset,
+            width: badge,
+            height: badge
+        )
         badgeView.isHidden = item.badge == nil
+    }
+
+    /// Icons grow with the taskbar: fill the tile minus a 6pt inset on each edge.
+    static func iconLength(tileHeight: CGFloat) -> CGFloat {
+        max(16, tileHeight - 12)
+    }
+
+    static func badgeLength(iconLength: CGFloat) -> CGFloat {
+        max(14, (iconLength * 14 / 26).rounded())
     }
 
     override func draw(_ dirtyRect: NSRect) {
         let dim = settings.indicateMinimizedHidden && item.isMinimizedOrHidden
-        if hovered {
+        let tile = bounds.insetBy(dx: 2, dy: 3)
+        let stacked = item.windows.count > 1 && (hovered || item.isActive)
+        if stacked {
+            let peek: CGFloat = 6
+            let radius: CGFloat = 8
+            let front = CGRect(
+                x: tile.minX,
+                y: tile.minY,
+                width: tile.width - peek,
+                height: tile.height
+            )
+            let back = CGRect(
+                x: tile.minX + peek,
+                y: tile.minY,
+                width: tile.width - peek,
+                height: tile.height
+            )
+            let frontPath = NSBezierPath(roundedRect: front, xRadius: radius, yRadius: radius)
+            let backPath = NSBezierPath(roundedRect: back, xRadius: radius, yRadius: radius)
+            let peekRect = CGRect(x: front.maxX, y: tile.minY, width: peek, height: tile.height)
+            NSGraphicsContext.saveGraphicsState()
+            NSBezierPath(rect: peekRect).addClip()
+            backPath.addClip()
+            NSColor.labelColor.withAlphaComponent(0.18).setFill()
+            backPath.fill()
+            if let gradient = NSGradient(colors: [
+                NSColor.black.withAlphaComponent(0.32),
+                NSColor.black.withAlphaComponent(0)
+            ]) {
+                gradient.draw(in: peekRect, angle: 0)
+            }
+            NSGraphicsContext.restoreGraphicsState()
             NSColor.labelColor.withAlphaComponent(0.10).setFill()
-            NSBezierPath(roundedRect: bounds.insetBy(dx: 2, dy: 3), xRadius: 8, yRadius: 8).fill()
+            frontPath.fill()
+        } else if hovered {
+            NSColor.labelColor.withAlphaComponent(0.10).setFill()
+            NSBezierPath(roundedRect: tile, xRadius: 8, yRadius: 8).fill()
         }
         alphaValue = dim ? 0.55 : 1
     }
@@ -167,16 +215,12 @@ final class TaskItemView: NSView {
     private func refresh() {
         iconView.image = icon()
         badgeView.text = item.badge
-        if item.isPinnedLauncher {
+        if item.isPinnedLauncher || !settings.compactItems || item.windows.isEmpty {
             dotsView.count = 0
             dotsView.activeIndex = nil
-        } else if settings.compactItems {
-            let windows = item.windows
-            dotsView.count = max(windows.count, 1)
-            dotsView.activeIndex = windows.firstIndex(where: \.isActive)
         } else {
-            dotsView.count = 0
-            dotsView.activeIndex = nil
+            dotsView.count = 1
+            dotsView.activeIndex = item.isActive ? 0 : nil
         }
         let fontSize = CGFloat(settings.fontSize)
         let base = NSFont.systemFont(ofSize: fontSize)
@@ -282,11 +326,7 @@ private final class VerticallyCenteredTextFieldCell: NSTextFieldCell {
 }
 
 private final class WindowDotsView: NSView {
-    static let diameter: CGFloat = 4
-    static let gap: CGFloat = 3
     static let bandHeight: CGFloat = 6
-    static let maxExactDots = 4
-    static let stackOffset: CGFloat = diameter / 2
 
     var count: Int = 0 {
         didSet {
@@ -309,91 +349,17 @@ private final class WindowDotsView: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         guard count >= 1 else { return }
-        if count == 1 {
-            drawRunningMark(active: activeIndex != nil)
-            return
-        }
-        if count > Self.maxExactDots {
-            drawStackedDots()
-        } else {
-            drawSpacedDots()
-        }
-    }
-
-    private func drawRunningMark(active: Bool) {
+        let active = activeIndex != nil
         let height: CGFloat = 3
-        let width: CGFloat = active ? 22 : 12
+        let width: CGFloat = bounds.width * (active ? 22 / 26 : 12 / 26)
         let rect = CGRect(
             x: (bounds.width - width) / 2,
             y: (bounds.height - height) / 2,
             width: width,
             height: height
         )
-        let color = NSColor.systemBlue.withAlphaComponent(active ? 1 : 0.55)
-        color.setFill()
+        NSColor.systemBlue.withAlphaComponent(active ? 1 : 0.55).setFill()
         NSBezierPath(roundedRect: rect, xRadius: height / 2, yRadius: height / 2).fill()
-    }
-
-    private func drawSpacedDots() {
-        let diameter = Self.diameter
-        let gap = Self.gap
-        let total = CGFloat(count) * diameter + CGFloat(count - 1) * gap
-        var x = (bounds.width - total) / 2
-        let y = (bounds.height - diameter) / 2
-        for index in 0..<count {
-            fillDot(
-                CGRect(x: x, y: y, width: diameter, height: diameter),
-                color: index == activeIndex ? NSColor.systemBlue : NSColor.secondaryLabelColor
-            )
-            x += diameter + gap
-        }
-    }
-
-    private func drawStackedDots() {
-        let diameter = Self.diameter
-        let offset = Self.stackOffset
-        let outline: CGFloat = 1
-        let maxFit = max(2, Int(floor((bounds.width - diameter - outline * 2) / offset)) + 1)
-        let shown = min(count, maxFit)
-        let total = diameter + CGFloat(shown - 1) * offset
-        let startX = (bounds.width - total) / 2
-        let y = (bounds.height - diameter) / 2
-        let activeShown: Int? = {
-            guard let activeIndex else { return nil }
-            if activeIndex < shown { return activeIndex }
-            return shown - 1
-        }()
-        for index in 0..<shown {
-            let rect = CGRect(x: startX + CGFloat(index) * offset, y: y, width: diameter, height: diameter)
-            let fill = index == activeShown ? NSColor.systemBlue : stackGrey(index: index, of: shown)
-            fillDot(rect, color: fill)
-            strokeDot(rect, color: darkerFill(fill))
-        }
-    }
-
-    private func stackGrey(index: Int, of shown: Int) -> NSColor {
-        let t = shown <= 1 ? 1 : CGFloat(index) / CGFloat(shown - 1)
-        let darkMode = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-        let dark: CGFloat = darkMode ? 0.38 : 0.22
-        let light: CGFloat = darkMode ? 0.88 : 0.72
-        return NSColor(white: dark + (light - dark) * t, alpha: 1)
-    }
-
-    private func fillDot(_ rect: CGRect, color: NSColor) {
-        color.setFill()
-        NSBezierPath(ovalIn: rect).fill()
-    }
-
-    private func strokeDot(_ rect: CGRect, color: NSColor) {
-        let path = NSBezierPath(ovalIn: rect)
-        path.lineWidth = 1
-        color.setStroke()
-        path.stroke()
-    }
-
-    private func darkerFill(_ color: NSColor) -> NSColor {
-        let rgb = color.usingColorSpace(.deviceRGB) ?? color
-        return rgb.blended(withFraction: 0.22, of: .black) ?? rgb
     }
 }
 
@@ -406,8 +372,9 @@ private final class BadgeView: NSView {
         guard let text, !text.isEmpty else { return }
         NSColor.systemRed.setFill()
         NSBezierPath(ovalIn: bounds).fill()
+        let fontSize = max(8, bounds.height * 8 / 14)
         let attrs: [NSAttributedString.Key: Any] = [
-            .font: NSFont.boldSystemFont(ofSize: 8),
+            .font: NSFont.boldSystemFont(ofSize: fontSize),
             .foregroundColor: NSColor.white
         ]
         let string = NSString(string: text)

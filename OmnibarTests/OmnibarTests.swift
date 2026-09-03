@@ -402,6 +402,59 @@ final class DragReorderTests: XCTestCase {
     }
 }
 
+final class StartButtonSpinMotionTests: XCTestCase {
+    func testOpenFromRestIsFullClockwiseTurn() {
+        XCTAssertEqual(StartButtonSpinMotion.targetAngle(from: 0, opening: true), -StartButtonSpinMotion.turn, accuracy: 0.0001)
+    }
+
+    func testCloseFromRestIsFullReverseTurn() {
+        XCTAssertEqual(StartButtonSpinMotion.targetAngle(from: 0, opening: false), StartButtonSpinMotion.turn, accuracy: 0.0001)
+    }
+
+    func testMidOpenContinuesClockwiseToRest() {
+        XCTAssertEqual(StartButtonSpinMotion.targetAngle(from: -.pi, opening: true), -StartButtonSpinMotion.turn, accuracy: 0.0001)
+    }
+
+    func testMidOpenCloseUnwindsToRest() {
+        XCTAssertEqual(StartButtonSpinMotion.targetAngle(from: -.pi, opening: false), 0, accuracy: 0.0001)
+    }
+
+    func testPartialTurnShortensDuration() {
+        let full = StartButtonSpinMotion.duration(from: 0, to: -StartButtonSpinMotion.turn)
+        let half = StartButtonSpinMotion.duration(from: -.pi, to: 0)
+        XCTAssertEqual(full, StartButtonSpinMotion.fullTurnDuration, accuracy: 0.0001)
+        XCTAssertEqual(half, StartButtonSpinMotion.fullTurnDuration / 2, accuracy: 0.0001)
+    }
+}
+
+final class TaskItemIconLayoutTests: XCTestCase {
+    func testIconGrowsWithTileHeight() {
+        XCTAssertEqual(TaskItemView.iconLength(tileHeight: 26), 16)
+        XCTAssertEqual(TaskItemView.iconLength(tileHeight: 38), 26)
+        XCTAssertEqual(TaskItemView.iconLength(tileHeight: 62), 50)
+    }
+
+    func testBadgeGrowsWithIcon() {
+        XCTAssertEqual(TaskItemView.badgeLength(iconLength: 26), 14)
+        XCTAssertEqual(TaskItemView.badgeLength(iconLength: 50), 27)
+    }
+
+    @MainActor
+    func testCompactIconFillsTallerTiles() {
+        let item = TaskItem(
+            id: "pin-x",
+            kind: .pinned(bundleID: "x", appName: "X", icon: nil, badge: nil)
+        )
+        var settings = AppSettings.default
+        settings.iconOnly = true
+        let view = TaskItemView(item: item, settings: settings)
+        view.frame = NSRect(x: 0, y: 0, width: 72, height: 62)
+        view.layoutSubtreeIfNeeded()
+        let iconView = view.subviews.compactMap { $0 as? NSImageView }.first
+        XCTAssertEqual(iconView?.frame.size, NSSize(width: 50, height: 50))
+    }
+}
+
 final class AppCatalogGroupingTests: XCTestCase {
     @MainActor
     func testLetterGroups() {

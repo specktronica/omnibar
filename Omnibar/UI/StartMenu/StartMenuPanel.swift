@@ -2,6 +2,9 @@ import AppKit
 import Foundation
 
 final class StartMenuPanel: NSPanel {
+    var onPresented: (() -> Void)?
+    var onDismissed: (() -> Void)?
+
     private let effect = NSVisualEffectView()
     private let searchField = SearchField()
     private let appList = AppListView()
@@ -91,11 +94,16 @@ final class StartMenuPanel: NSPanel {
         orderFrontRegardless()
         makeFirstResponder(searchField)
         installMonitor()
+        onPresented?()
     }
 
     func dismiss() {
+        let wasVisible = isVisible
         removeMonitor()
         orderOut(nil)
+        if wasVisible {
+            onDismissed?()
+        }
     }
 
     override func cancelOperation(_ sender: Any?) {

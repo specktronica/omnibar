@@ -29,6 +29,8 @@ final class TaskbarPanel: NSPanel {
         configureContent()
         taskbarView.onStartLeftClick = { [weak self] in self?.handleStartLeftClick() }
         taskbarView.onStartRightClick = { [weak self] event in self?.showStartActionMenu(event) }
+        startMenu.onPresented = { [weak self] in self?.taskbarView.spinStartButton(opening: true) }
+        startMenu.onDismissed = { [weak self] in self?.taskbarView.spinStartButton(opening: false) }
         taskbarView.onItemClick = { item in WindowActions.handlePrimaryClick(item) }
         taskbarView.onItemRightClick = { [weak self] item, event in
             self?.showContextMenu(for: item, event: event)
@@ -161,8 +163,10 @@ final class TaskbarPanel: NSPanel {
         case .startMenu:
             toggleStartMenu()
         case .launchpad:
+            taskbarView.spinStartButton(opening: true)
             StartMenuPanel.openLaunchpad()
         case .spotlight:
+            taskbarView.spinStartButton(opening: true)
             StartMenuPanel.openSpotlight()
         }
     }
