@@ -59,13 +59,13 @@ final class SettingsStoreTests: XCTestCase {
         defer { OrderStore.shared.replace(backup) }
         let store = isolatedSettingsStore(isolated.defaults)
         store.update {
-            $0.launchAtLogin = true
+            $0.launchAtLogin = false
             $0.transparency = 0.1
             $0.taskbarHeight = 64
         }
         OrderStore.shared.replace(["a", "b"])
         store.resetToDefaults()
-        XCTAssertTrue(store.settings.launchAtLogin)
+        XCTAssertFalse(store.settings.launchAtLogin)
         XCTAssertEqual(store.settings.transparency, AppSettings.default.transparency)
         XCTAssertEqual(store.settings.taskbarHeight, AppSettings.default.taskbarHeight)
         XCTAssertTrue(OrderStore.shared.order.isEmpty)

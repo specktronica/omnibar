@@ -146,6 +146,16 @@ final class SettingsTests: XCTestCase {
     }
 
     @MainActor
+    func testTaskbarHeightDefaultsTo50() {
+        XCTAssertEqual(AppSettings.default.taskbarHeight, 50)
+    }
+
+    @MainActor
+    func testLaunchAtLoginDefaultsOn() {
+        XCTAssertTrue(AppSettings.default.launchAtLogin)
+    }
+
+    @MainActor
     func testStartLogoDefaultsToClassic() {
         XCTAssertEqual(AppSettings.default.startLogo, .classic)
         XCTAssertEqual(StartLogoTheme.matching(.classic), .classic)

@@ -20,7 +20,7 @@ struct AppSettings: Codable, Equatable, Sendable {
     var followSystemAppearance: Bool = true
     var forceDarkMode: Bool = false
     var transparency: Double = 0.55
-    var taskbarHeight: Double = 40
+    var taskbarHeight: Double = 50
     var fontSize: Double = 12
     var iconOnly: Bool = false
     var groupByApplication: Bool = true
@@ -40,7 +40,7 @@ struct AppSettings: Codable, Equatable, Sendable {
     var autoHide: Bool = false
     var pollInterval: Double = 1.5
     var fullyHideDock: Bool = true
-    var launchAtLogin: Bool = false
+    var launchAtLogin: Bool = true
     var startButtonAction: StartButtonAction = .startMenu
     var recentAppsLimit: Int = 10
     var startLogo: StartLogoPalette = .classic
