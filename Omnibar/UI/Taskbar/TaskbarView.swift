@@ -5,6 +5,7 @@ import QuartzCore
 final class TaskbarView: NSView {
     var onStartLeftClick: (() -> Void)?
     var onStartRightClick: ((NSEvent) -> Void)?
+    var onShowDesktopClick: (() -> Void)?
     var onItemClick: ((TaskItem) -> Void)?
     var onItemMiddleClick: ((TaskItem) -> Void)?
     var onItemRightClick: ((TaskItem, NSEvent) -> Void)?
@@ -17,6 +18,7 @@ final class TaskbarView: NSView {
     private let startButton = StartButtonView()
     private let startDivider = BarDivider()
     private let appsDivider = BarDivider()
+    private let showDesktopButton = ShowDesktopButtonView()
     private var itemViews: [TaskItemView] = []
     private var items: [TaskItem] = []
     private var settings: AppSettings = .default
@@ -27,10 +29,12 @@ final class TaskbarView: NSView {
         super.init(frame: frameRect)
         startButton.onLeftClick = { [weak self] in self?.onStartLeftClick?() }
         startButton.onRightClick = { [weak self] event in self?.onStartRightClick?(event) }
+        showDesktopButton.onClick = { [weak self] in self?.onShowDesktopClick?() }
         addSubview(startButton)
         addSubview(startDivider)
         appsDivider.isHidden = true
         addSubview(appsDivider)
+        addSubview(showDesktopButton)
     }
 
     required init?(coder: NSCoder) { nil }
@@ -46,6 +50,10 @@ final class TaskbarView: NSView {
 
     func startButtonFrame() -> NSRect {
         startButton.frame
+    }
+
+    func showDesktopButtonFrame() -> NSRect {
+        showDesktopButton.isHidden ? .zero : showDesktopButton.frame
     }
 
     func spinStartButton(opening: Bool) {
@@ -67,6 +75,9 @@ final class TaskbarView: NSView {
         guard window.frame.contains(screenPoint) else { return nil }
         let windowPoint = window.convertFromScreen(NSRect(origin: screenPoint, size: .zero)).origin
         let local = convert(windowPoint, from: nil)
+        if settings.showDesktopButton, showDesktopButton.frame.contains(local) {
+            return nil
+        }
         return itemViews.first { $0.frame.contains(local) }?.item
     }
 
@@ -85,6 +96,7 @@ final class TaskbarView: NSView {
             width: 1,
             height: max(0, height - dividerInset * 2)
         )
+        layoutShowDesktopButton(height: height)
         if draggingView == nil {
             layoutItems()
         }
@@ -112,6 +124,7 @@ final class TaskbarView: NSView {
             itemViews[index].apply(item: item, settings: settings)
         }
         addSubview(appsDivider, positioned: .above, relativeTo: nil)
+        addSubview(showDesktopButton, positioned: .above, relativeTo: nil)
     }
 
     private func wire(_ view: TaskItemView) {
@@ -125,11 +138,23 @@ final class TaskbarView: NSView {
         view.onDragEnded = { [weak self] itemView, event in self?.endDrag(itemView, event: event) }
     }
 
+    private func layoutShowDesktopButton(height: CGFloat) {
+        let enabled = settings.showDesktopButton
+        showDesktopButton.isHidden = !enabled
+        guard enabled else { return }
+        let width = ShowDesktopLogic.buttonWidth
+        let frame = CGRect(x: bounds.width - width, y: 0, width: width, height: height)
+        if showDesktopButton.frame != frame {
+            showDesktopButton.frame = frame
+        }
+    }
+
     private func slotMetrics() -> (originX: CGFloat, tileWidth: CGFloat, pinSplit: Int?) {
         let originX = startDivider.frame.maxX + 4
         let pinSplit = pinSplitIndex()
         let sectionGap: CGFloat = pinSplit == nil ? 0 : 9
-        let available = max(0, bounds.width - originX - 8 - sectionGap)
+        let trailing = ShowDesktopLogic.trailingInset(buttonEnabled: settings.showDesktopButton)
+        let available = max(0, bounds.width - originX - trailing - sectionGap)
         let count = max(1, itemViews.count)
         let maxTile: CGFloat = settings.compactItems ? bounds.height + 16 : 220
         let minTile: CGFloat = settings.compactItems ? bounds.height + 8 : 72
@@ -169,12 +194,17 @@ final class TaskbarView: NSView {
             view.frame.origin.y = originY
             CATransaction.commit()
         }
+        let limitX = bounds.width - ShowDesktopLogic.trailingInset(buttonEnabled: settings.showDesktopButton)
         let frames: [(TaskItemView, CGRect)] = itemViews.enumerated().compactMap { index, view in
             guard view !== draggingView else { return nil }
+            let x = min(
+                itemOriginX(index: index, originX: originX, tileWidth: tileWidth, pinSplit: pinSplit),
+                limitX
+            )
             let frame = CGRect(
-                x: itemOriginX(index: index, originX: originX, tileWidth: tileWidth, pinSplit: pinSplit),
+                x: x,
                 y: originY,
-                width: tileWidth,
+                width: min(tileWidth, max(0, limitX - x)),
                 height: height
             )
             return (view, frame)

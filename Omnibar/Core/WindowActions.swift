@@ -29,6 +29,12 @@ enum WindowActions {
         }
     }
 
+    static func unminimize(_ window: WindowInfo) {
+        if let element = element(for: window) {
+            AXBridge.setMinimized(element, false)
+        }
+    }
+
     static func zoom(_ window: WindowInfo) {
         if let element = element(for: window) {
             AXBridge.pressZoomButton(element)

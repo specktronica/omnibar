@@ -27,6 +27,7 @@ struct AppSettings: Codable, Equatable, Sendable {
     var showTabsAsItems: Bool = true
     var indicateMinimizedHidden: Bool = true
     var hideOnClickInsteadOfMinimize: Bool = false
+    var showDesktopButton: Bool = true
     var thumbnailDelay: Double = 0.4
     var thumbnailSize: Double = 240
     var showTitleInThumbnail: Bool = false
@@ -76,6 +77,7 @@ extension AppSettings {
         case showTabsAsItems
         case indicateMinimizedHidden
         case hideOnClickInsteadOfMinimize
+        case showDesktopButton
         case thumbnailDelay
         case thumbnailSize
         case showTitleInThumbnail
@@ -112,6 +114,8 @@ extension AppSettings {
             ?? defaults.indicateMinimizedHidden
         hideOnClickInsteadOfMinimize = try container.decodeIfPresent(Bool.self, forKey: .hideOnClickInsteadOfMinimize)
             ?? defaults.hideOnClickInsteadOfMinimize
+        showDesktopButton = try container.decodeIfPresent(Bool.self, forKey: .showDesktopButton)
+            ?? defaults.showDesktopButton
         thumbnailDelay = try container.decodeIfPresent(Double.self, forKey: .thumbnailDelay) ?? defaults.thumbnailDelay
         thumbnailSize = try container.decodeIfPresent(Double.self, forKey: .thumbnailSize) ?? defaults.thumbnailSize
         showTitleInThumbnail = try container.decodeIfPresent(Bool.self, forKey: .showTitleInThumbnail)

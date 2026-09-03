@@ -238,6 +238,7 @@ private struct BehaviorPane: View {
             Toggle("Show tabs as individual items", isOn: $settings.showTabsAsItems)
             Toggle("Indicate minimized or hidden windows", isOn: $settings.indicateMinimizedHidden)
             Toggle("Hide the app instead of minimizing on click", isOn: $settings.hideOnClickInsteadOfMinimize)
+            Toggle("Show desktop button on the right edge", isOn: $settings.showDesktopButton)
             Toggle("Allow drag and drop reordering", isOn: $settings.allowDragReorder)
             Toggle("Keep task order when a window changes Space", isOn: $settings.keepOrderAcrossSpaceChange)
             Toggle("Auto-resize windows that overlap Taskbar", isOn: $settings.autoResizeOverlapping)

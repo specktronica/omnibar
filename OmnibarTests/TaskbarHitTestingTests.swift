@@ -29,7 +29,50 @@ final class TaskbarHitTestingTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(first.frame.minX, bar.startButtonFrame().maxX)
     }
 
-    private func makeBar(itemCount: Int) -> TaskbarView {
+    func testShowDesktopButtonIsHitAtRightEdge() {
+        let bar = makeBar(itemCount: 3)
+        let slice = bar.showDesktopButtonFrame()
+        XCTAssertEqual(slice.width, ShowDesktopLogic.buttonWidth)
+        XCTAssertEqual(slice.maxX, bar.bounds.maxX)
+        XCTAssertEqual(slice.height, bar.bounds.height)
+        let hit = bar.hitTest(NSPoint(x: bar.bounds.maxX - 1, y: bar.bounds.midY))
+        XCTAssertTrue(
+            hit is ShowDesktopButtonView,
+            "show desktop click hit \(String(describing: type(of: hit)))"
+        )
+    }
+
+    func testLastItemDoesNotCoverShowDesktopButton() {
+        let bar = makeBar(itemCount: 3)
+        guard let last = bar.view(forItemID: "item-2") else {
+            return XCTFail("missing last item view")
+        }
+        let slice = bar.showDesktopButtonFrame()
+        XCTAssertLessThanOrEqual(last.frame.maxX, slice.minX)
+    }
+
+    func testShowDesktopButtonStaysHitWithManyItems() {
+        let bar = makeBar(itemCount: 40)
+        let hit = bar.hitTest(NSPoint(x: bar.bounds.maxX - 1, y: bar.bounds.midY))
+        XCTAssertTrue(
+            hit is ShowDesktopButtonView,
+            "show desktop click hit \(String(describing: type(of: hit)))"
+        )
+        if let last = bar.view(forItemID: "item-39") {
+            XCTAssertLessThanOrEqual(last.frame.maxX, bar.showDesktopButtonFrame().minX)
+        }
+    }
+
+    func testShowDesktopButtonCanBeHidden() {
+        var settings = AppSettings.default
+        settings.showDesktopButton = false
+        let bar = makeBar(itemCount: 3, settings: settings)
+        XCTAssertEqual(bar.showDesktopButtonFrame(), .zero)
+        let hit = bar.hitTest(NSPoint(x: bar.bounds.maxX - 1, y: bar.bounds.midY))
+        XCTAssertFalse(hit is ShowDesktopButtonView)
+    }
+
+    private func makeBar(itemCount: Int, settings: AppSettings = .default) -> TaskbarView {
         let bar = TaskbarView(frame: NSRect(x: 0, y: 0, width: 900, height: 40))
         let items = (0..<itemCount).map { index in
             TaskItem(
@@ -42,7 +85,7 @@ final class TaskbarHitTestingTests: XCTestCase {
                 ))
             )
         }
-        bar.update(items: items, settings: .default)
+        bar.update(items: items, settings: settings)
         bar.layoutSubtreeIfNeeded()
         return bar
     }

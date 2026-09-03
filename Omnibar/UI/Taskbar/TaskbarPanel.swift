@@ -30,6 +30,7 @@ final class TaskbarPanel: NSPanel {
         configureContent()
         taskbarView.onStartLeftClick = { [weak self] in self?.handleStartLeftClick() }
         taskbarView.onStartRightClick = { [weak self] event in self?.showStartActionMenu(event) }
+        taskbarView.onShowDesktopClick = { [weak self] in self?.handleShowDesktopClick() }
         startMenu.onPresented = { [weak self] in self?.taskbarView.spinStartButton(opening: true) }
         startMenu.onDismissed = { [weak self] in self?.taskbarView.spinStartButton(opening: false) }
         taskbarView.onItemClick = { item in WindowActions.handlePrimaryClick(item) }
@@ -172,6 +173,12 @@ final class TaskbarPanel: NSPanel {
         }
         startMenu.appearance = appearance
         thumbnail.appearance = appearance
+    }
+
+    private func handleShowDesktopClick() {
+        startMenu.dismiss()
+        thumbnail.dismiss()
+        ShowDesktopController.shared.toggle()
     }
 
     private func handleStartLeftClick() {

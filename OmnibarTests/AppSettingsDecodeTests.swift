@@ -15,6 +15,7 @@ final class AppSettingsDecodeTests: XCTestCase {
             "recentAppsLimit",
             "overlapSkipBundleIDs",
             "hideOnClickInsteadOfMinimize",
+            "showDesktopButton",
             "mainDisplayOnly",
             "autoHide",
             "showTabsAsItems"
@@ -27,6 +28,8 @@ final class AppSettingsDecodeTests: XCTestCase {
         XCTAssertEqual(decoded.recentAppsLimit, AppSettings.default.recentAppsLimit)
         XCTAssertEqual(decoded.overlapSkipBundleIDs, AppSettings.default.overlapSkipBundleIDs)
         XCTAssertEqual(decoded.hideOnClickInsteadOfMinimize, AppSettings.default.hideOnClickInsteadOfMinimize)
+        XCTAssertEqual(decoded.showDesktopButton, AppSettings.default.showDesktopButton)
+        XCTAssertTrue(decoded.showDesktopButton)
         XCTAssertEqual(decoded.mainDisplayOnly, AppSettings.default.mainDisplayOnly)
         XCTAssertEqual(decoded.autoHide, AppSettings.default.autoHide)
         XCTAssertEqual(decoded.showTabsAsItems, AppSettings.default.showTabsAsItems)

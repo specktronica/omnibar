@@ -1,23 +1,37 @@
 import AppKit
 import ApplicationServices
+import CoreGraphics
 import Foundation
 import Observation
 
 /// Screen Recording TCC vs what ScreenCaptureKit can actually do in this process.
 ///
-/// `CGPreflightScreenCaptureAccess()` becomes true as soon as the user flips the
-/// System Settings toggle, but capture APIs stay inert until relaunch. A grant
-/// that appears after this process started is therefore `pendingRestart`, not
-/// `trusted`.
+/// `CGPreflightScreenCaptureAccess()` stays false until relaunch after a new
+/// grant. Other processes' `kCGWindowName` values appear as soon as the toggle
+/// is on, so that is the in-session signal that TCC listed us (`tccListed`).
 enum ScreenRecordingAccess: Equatable {
     case denied
     case pendingRestart
     case trusted
 
-    static func resolve(trustedAtLaunch: Bool, preflight: Bool) -> ScreenRecordingAccess {
-        if !preflight { return .denied }
-        if !trustedAtLaunch { return .pendingRestart }
-        return .trusted
+    static func resolve(trustedAtLaunch: Bool, preflight: Bool, tccListed: Bool) -> ScreenRecordingAccess {
+        if trustedAtLaunch {
+            return preflight ? .trusted : .denied
+        }
+        if preflight || tccListed {
+            return .pendingRestart
+        }
+        return .denied
+    }
+
+    static func titlesIndicateTCCGrant(windows: [[String: Any]], selfPID: pid_t) -> Bool {
+        for window in windows {
+            let pid = (window[kCGWindowOwnerPID as String] as? NSNumber)?.intValue ?? 0
+            if pid == 0 || pid == Int(selfPID) { continue }
+            let name = window[kCGWindowName as String] as? String
+            if let name, !name.isEmpty { return true }
+        }
+        return false
     }
 }
 
@@ -31,13 +45,18 @@ final class PermissionsManager {
     private(set) var screenRecordingNeedsRestart: Bool
 
     private let screenRecordingTrustedAtLaunch: Bool
+    private var observedScreenRecordingGrant = false
     private var pollTimer: Timer?
 
     init() {
         accessibilityTrusted = AXIsProcessTrusted()
         let preflight = CGPreflightScreenCaptureAccess()
         screenRecordingTrustedAtLaunch = preflight
-        let access = ScreenRecordingAccess.resolve(trustedAtLaunch: preflight, preflight: preflight)
+        let access = ScreenRecordingAccess.resolve(
+            trustedAtLaunch: preflight,
+            preflight: preflight,
+            tccListed: false
+        )
         screenRecordingTrusted = access == .trusted
         screenRecordingNeedsRestart = access == .pendingRestart
         NotificationCenter.default.addObserver(
@@ -65,9 +84,16 @@ final class PermissionsManager {
 
     func refresh() {
         let ax = Self.readAccessibilityTrusted()
+        let preflight = CGPreflightScreenCaptureAccess()
+        if screenRecordingTrustedAtLaunch && !preflight {
+            observedScreenRecordingGrant = false
+        } else if preflight || Self.screenRecordingListedInTCC() {
+            observedScreenRecordingGrant = true
+        }
         let access = ScreenRecordingAccess.resolve(
             trustedAtLaunch: screenRecordingTrustedAtLaunch,
-            preflight: CGPreflightScreenCaptureAccess()
+            preflight: preflight,
+            tccListed: observedScreenRecordingGrant
         )
         let screenTrusted = access == .trusted
         let needsRestart = access == .pendingRestart
@@ -103,6 +129,9 @@ final class PermissionsManager {
         let options = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
         let trusted = AXIsProcessTrustedWithOptions(options)
         accessibilityTrusted = trusted
+        // AXIsProcessTrustedWithOptions only presents once per process. Open the
+        // pane on every click so a dismissed Settings window can be brought back.
+        Self.openPrivacySettings(anchor: "Privacy_Accessibility")
         startPolling()
         return trusted
     }
@@ -110,9 +139,32 @@ final class PermissionsManager {
     @discardableResult
     func promptScreenRecording() -> Bool {
         _ = CGRequestScreenCaptureAccess()
+        Self.openPrivacySettings(anchor: "Privacy_ScreenCapture")
         startPolling()
         refresh()
         return screenRecordingTrusted
+    }
+
+    static func privacySettingsURLStrings(anchor: String) -> [String] {
+        [
+            "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?\(anchor)",
+            "x-apple.systempreferences:com.apple.preference.security?\(anchor)",
+        ]
+    }
+
+    static func openPrivacySettings(anchor: String) {
+        for string in privacySettingsURLStrings(anchor: anchor) {
+            guard let url = URL(string: string) else { continue }
+            if NSWorkspace.shared.open(url) { return }
+        }
+    }
+
+    private static func screenRecordingListedInTCC() -> Bool {
+        let windows = CGWindowListCopyWindowInfo(.optionAll, kCGNullWindowID) as? [[String: Any]] ?? []
+        return ScreenRecordingAccess.titlesIndicateTCCGrant(
+            windows: windows,
+            selfPID: ProcessInfo.processInfo.processIdentifier
+        )
     }
 
     private static func readAccessibilityTrusted() -> Bool {

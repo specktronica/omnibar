@@ -71,6 +71,7 @@ Signing, TCC, and tests are covered in [docs/development.md](docs/development.md
 
 - Taskbar at the bottom of each screen, matching the system light/dark appearance (or forced dark)
 - Start button: Start Menu, Launchpad, or Spotlight (right-click to choose)
+- Show desktop: thin slice on the right of the bar; click to minimize all windows, click again to restore
 - Start button logo: color presets, or pick each lobe
 - Start Menu with search, A–Z app list, pinned grid, and recent apps
 - Per-window tiles with icon, title, and Dock badges; click to raise, click the active tile to minimize (or hide)

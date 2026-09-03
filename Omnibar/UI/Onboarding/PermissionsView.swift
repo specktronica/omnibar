@@ -114,8 +114,8 @@ private final class OnboardingWindowDelegate: NSObject, NSWindowDelegate {
     }
 
     func windowShouldClose(_ sender: NSWindow) -> Bool {
-        if !OnboardingWindow.isShowing { return true }
-        return NSApp.isActive
+        sender.canHide = true
+        return true
     }
 
     func windowWillClose(_ notification: Notification) {
@@ -137,14 +137,18 @@ struct PermissionsView: View {
                 title: "Accessibility",
                 subtitle: "Required to read window titles and raise, minimize, or close windows.",
                 granted: permissions.accessibilityTrusted,
+                showsAction: !permissions.accessibilityTrusted,
                 actionTitle: "Enable Accessibility"
             ) {
                 _ = PermissionsManager.shared.promptAccessibility()
             }
             permissionRow(
                 title: "Screen Recording",
-                subtitle: "Optional. Enables live window thumbnails on hover.",
-                granted: permissions.screenRecordingTrusted,
+                subtitle: permissions.screenRecordingNeedsRestart
+                    ? "Granted. Restart Omnibar to enable live hover thumbnails."
+                    : "Optional. Enables live window thumbnails on hover.",
+                granted: permissions.screenRecordingTrusted || permissions.screenRecordingNeedsRestart,
+                showsAction: !permissions.screenRecordingTrusted,
                 actionTitle: "Enable Screen Recording"
             ) {
                 _ = PermissionsManager.shared.promptScreenRecording()
@@ -201,6 +205,7 @@ struct PermissionsView: View {
         title: String,
         subtitle: String,
         granted: Bool,
+        showsAction: Bool,
         actionTitle: String,
         action: @escaping () -> Void
     ) -> some View {
@@ -213,7 +218,7 @@ struct PermissionsView: View {
                 Text(subtitle).font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
-            if !granted {
+            if showsAction {
                 Button(actionTitle, action: action)
             }
         }

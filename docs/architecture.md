@@ -25,7 +25,7 @@ scripts/        bootstrap (XcodeGen), build, release zip, Homebrew publish
 2. Create the menu extra (`StatusItemController`).
 3. Start `AppCatalog` (application directories + recents).
 4. Apply Dock hiding from settings (`DockManager`).
-5. If Accessibility is trusted, start `WindowTracker` and `ScreenMonitor`. Otherwise show onboarding. The taskbar does not start while onboarding is showing; Continue (or closing the window) posts `.omnibarPermissionsDidChange` after `isShowing` is cleared. Screen Recording is treated as granted for capture only when `CGPreflightScreenCaptureAccess()` was already true at process start; a mid-session grant is pending restart.
+5. If Accessibility is trusted, start `WindowTracker` and `ScreenMonitor`. Otherwise show onboarding. The taskbar does not start while onboarding is showing; Continue (or closing the window) posts `.omnibarPermissionsDidChange` after `isShowing` is cleared. Screen Recording is effective for capture only when `CGPreflightScreenCaptureAccess()` was already true at process start. A mid-session grant is pending restart: preflight stays false until relaunch, so onboarding detects the TCC toggle via other processes’ window titles (`kCGWindowName`).
 
 On quit, Dock prefs are restored, then tracker, screen monitor, and catalog stop.
 
@@ -65,7 +65,7 @@ Space membership and “this display is a fullscreen Space” come from private 
 
 ## Actions and overlays
 
-`WindowActions` raises, minimizes, closes, fullscreens, hides, quits, and “New Window” through `AXBridge` and `NSRunningApplication`. Primary click and middle-click are handled there.
+`WindowActions` raises, minimizes, unminimizes, closes, fullscreens, hides, quits, and “New Window” through `AXBridge` and `NSRunningApplication`. Primary click and middle-click are handled there. The thin Show desktop slice on the right of each bar calls `ShowDesktopController`, which minimizes every visible window on the current Spaces and restores that set on the next click.
 
 Each `TaskbarPanel` owns a `StartMenuPanel` and `ThumbnailPopover`. Thumbnails use ScreenCaptureKit (`ThumbnailService`) when Screen Recording is granted.
 

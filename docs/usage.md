@@ -4,7 +4,7 @@ Omnibar is a bottom-of-screen taskbar. It lists windows on the current Space, op
 
 ## First launch
 
-If Accessibility is not granted, an onboarding window appears. Continue is disabled until Accessibility is on. The taskbar appears only after you click Continue (or close the window). Screen Recording and “Hide the macOS Dock” are optional on that screen. Granting Screen Recording during that first launch does not take effect until Omnibar restarts: Continue becomes Restart, and the Screen Recording row stays unmarked until the new process starts.
+If Accessibility is not granted, an onboarding window appears. Continue is disabled until Accessibility is on. The taskbar appears only after you click Continue (or close the window). Screen Recording and “Hide the macOS Dock” are optional on that screen. Granting Screen Recording during that first launch does not take effect until Omnibar restarts: the row marks as granted, Continue becomes Restart, and Enable Screen Recording stays available until the new process starts.
 
 After that, Omnibar lives in the menu bar. The extra’s menu is **Settings…** (⌘,) and **Quit Omnibar** (⌘Q). Clicking the app again while it is already running opens Settings, as long as Accessibility is granted.
 
@@ -22,6 +22,7 @@ Each display gets its own bar unless Settings hide that display or restrict the 
 | Drag a tile | Reorder, when drag-and-drop reordering is enabled |
 | Click the Start button | Start Menu, Launchpad, or Spotlight (configured action) |
 | Right-click the Start button | Choose the Start button action |
+| Click the Show desktop slice (far right) | Minimize all windows on the current Spaces; click again to restore |
 
 In icons-only or grouped mode, a compact tile draws a running mark under the icon (wider when that app is active). Clicking a grouped tile raises a non-minimized window, or minimizes/hides if one of the group is already active.
 
@@ -57,7 +58,7 @@ Open from the menu extra, the taskbar **Taskbar → Settings…** item, or by re
 | --- | --- |
 | General | Launch at login, fully hide Dock, auto-hide taskbar, Start button action |
 | Appearance | Match system appearance or force dark, transparency, bar height, font size, icons-only, Start logo presets and per-lobe colors |
-| Behavior | Group by application, show tabs as items, indicate minimized/hidden, hide instead of minimize on click, drag reorder, keep order across Space changes, auto-resize overlapping windows |
+| Behavior | Group by application, show tabs as items, indicate minimized/hidden, hide instead of minimize on click, Show desktop button, drag reorder, keep order across Space changes, auto-resize overlapping windows |
 | Thumbnails | Hover delay, size, title in thumbnail, request Screen Recording |
 | Displays | Main display only, show windows from all screens, per-display visibility |
 | Start Menu | Start button action, recent-apps count |
@@ -78,6 +79,7 @@ Reset to defaults restores `AppSettings.default` except **Launch at login**, whi
 | Show tabs as individual items | on |
 | Indicate minimized or hidden | on |
 | Hide instead of minimize on click | off |
+| Show desktop button | on |
 | Thumbnail delay | 0.4 s (0–1.5) |
 | Thumbnail size | 240 (140–420) |
 | Show windows from all screens | off |
