@@ -2,6 +2,21 @@ import AppKit
 import CoreGraphics
 import Foundation
 
+nonisolated enum DockOrientation: Sendable {
+    static let top = "top"
+    static let bottom = "bottom"
+
+    static func normalized(_ value: String?) -> String {
+        switch value {
+        case "top": return "top"
+        case "left": return "left"
+        case "right": return "right"
+        case "bottom": return "bottom"
+        default: return bottom
+        }
+    }
+}
+
 nonisolated enum DockStripHiding: Sendable {
     static let dockWindowLevel = Int32(CGWindowLevelForKey(.dockWindow))
     static let buriedLevel = Int32(CGWindowLevelForKey(.desktopWindow)) - 2
@@ -51,6 +66,8 @@ final class DockManager {
         writeDock("autohide", true)
         writeDock("autohide-delay", 1000.0)
         writeDock("autohide-time-modifier", 0.0)
+        // Top keeps a Mission Control flash off Omnibar's bottom edge.
+        writeDock("orientation", DockOrientation.top)
         restartDock()
         appliedFullyHidden = true
         startMissionControlHiding()
@@ -71,9 +88,13 @@ final class DockManager {
             if let modifier = backup["autohide-time-modifier"] as? Double {
                 writeDock("autohide-time-modifier", modifier)
             }
+            if let orientation = backup["orientation"] as? String {
+                writeDock("orientation", DockOrientation.normalized(orientation))
+            }
             UserDefaults.standard.removeObject(forKey: backupKey)
         } else {
             writeDock("autohide-delay", 0.5)
+            writeDock("orientation", DockOrientation.bottom)
         }
         restartDock()
         appliedFullyHidden = false
@@ -127,12 +148,20 @@ final class DockManager {
     }
 
     private func backupIfNeeded() {
-        guard UserDefaults.standard.dictionary(forKey: backupKey) == nil else { return }
+        var backup = UserDefaults.standard.dictionary(forKey: backupKey) ?? [:]
         let defaults = UserDefaults(suiteName: domain)
-        var backup: [String: Any] = [:]
-        backup["autohide"] = defaults?.object(forKey: "autohide") as? Bool ?? false
-        backup["autohide-delay"] = defaults?.object(forKey: "autohide-delay") as? Double ?? 0.5
-        backup["autohide-time-modifier"] = defaults?.object(forKey: "autohide-time-modifier") as? Double ?? 1.0
+        if backup["autohide"] == nil {
+            backup["autohide"] = defaults?.object(forKey: "autohide") as? Bool ?? false
+        }
+        if backup["autohide-delay"] == nil {
+            backup["autohide-delay"] = defaults?.object(forKey: "autohide-delay") as? Double ?? 0.5
+        }
+        if backup["autohide-time-modifier"] == nil {
+            backup["autohide-time-modifier"] = defaults?.object(forKey: "autohide-time-modifier") as? Double ?? 1.0
+        }
+        if backup["orientation"] == nil {
+            backup["orientation"] = DockOrientation.normalized(defaults?.string(forKey: "orientation"))
+        }
         UserDefaults.standard.set(backup, forKey: backupKey)
     }
 

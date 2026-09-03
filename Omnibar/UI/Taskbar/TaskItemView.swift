@@ -358,24 +358,25 @@ private final class WindowDotsView: NSView {
         let total = diameter + CGFloat(shown - 1) * offset
         let startX = (bounds.width - total) / 2
         let y = (bounds.height - diameter) / 2
-        let rects = (0..<shown).map { index in
-            CGRect(x: startX + CGFloat(index) * offset, y: y, width: diameter, height: diameter)
-        }
         let activeShown: Int? = {
             guard let activeIndex else { return nil }
             if activeIndex < shown { return activeIndex }
             return shown - 1
         }()
-        for (index, rect) in rects.enumerated() where index != activeShown {
-            fillDot(rect, color: NSColor.secondaryLabelColor)
+        for index in 0..<shown {
+            let rect = CGRect(x: startX + CGFloat(index) * offset, y: y, width: diameter, height: diameter)
+            let fill = index == activeShown ? NSColor.systemBlue : stackGrey(index: index, of: shown)
+            fillDot(rect, color: fill)
+            strokeDot(rect, color: darkerFill(fill))
         }
-        if let activeShown {
-            fillDot(rects[activeShown], color: NSColor.systemBlue)
-        }
-        NSColor.black.setStroke()
-        for rect in rects {
-            strokeDot(rect)
-        }
+    }
+
+    private func stackGrey(index: Int, of shown: Int) -> NSColor {
+        let t = shown <= 1 ? 1 : CGFloat(index) / CGFloat(shown - 1)
+        let darkMode = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        let dark: CGFloat = darkMode ? 0.38 : 0.22
+        let light: CGFloat = darkMode ? 0.88 : 0.72
+        return NSColor(white: dark + (light - dark) * t, alpha: 1)
     }
 
     private func fillDot(_ rect: CGRect, color: NSColor) {
@@ -383,10 +384,16 @@ private final class WindowDotsView: NSView {
         NSBezierPath(ovalIn: rect).fill()
     }
 
-    private func strokeDot(_ rect: CGRect) {
-        let path = NSBezierPath(ovalIn: rect.insetBy(dx: -0.5, dy: -0.5))
+    private func strokeDot(_ rect: CGRect, color: NSColor) {
+        let path = NSBezierPath(ovalIn: rect)
         path.lineWidth = 1
+        color.setStroke()
         path.stroke()
+    }
+
+    private func darkerFill(_ color: NSColor) -> NSColor {
+        let rgb = color.usingColorSpace(.deviceRGB) ?? color
+        return rgb.blended(withFraction: 0.22, of: .black) ?? rgb
     }
 }
 

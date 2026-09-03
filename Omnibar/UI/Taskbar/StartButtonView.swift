@@ -5,36 +5,26 @@ final class StartButtonView: NSView {
     var onLeftClick: (() -> Void)?
     var onRightClick: ((NSEvent) -> Void)?
     private var hovered = false
-    private let iconView = NSImageView()
+    private var palette: StartLogoPalette = SettingsStore.shared.settings.startLogo
+
+    override var isOpaque: Bool { false }
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         wantsLayer = true
         layer?.backgroundColor = NSColor.clear.cgColor
-        iconView.image = BrandIcon.image(pointSize: 32)
-        iconView.imageScaling = .scaleProportionallyUpOrDown
-        iconView.imageFrameStyle = .none
-        iconView.wantsLayer = true
-        iconView.layer?.backgroundColor = NSColor.clear.cgColor
-        addSubview(iconView)
     }
 
     required init?(coder: NSCoder) { nil }
 
-    override func hitTest(_ point: NSPoint) -> NSView? {
-        bounds.contains(point) ? self : nil
+    func apply(_ palette: StartLogoPalette) {
+        guard palette != self.palette else { return }
+        self.palette = palette
+        needsDisplay = true
     }
 
-    override func layout() {
-        super.layout()
-        let pad: CGFloat = 6
-        let side = min(bounds.width, bounds.height) - pad * 2
-        iconView.frame = CGRect(
-            x: (bounds.width - side) / 2,
-            y: (bounds.height - side) / 2,
-            width: side,
-            height: side
-        )
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        bounds.contains(point) ? self : nil
     }
 
     override func updateTrackingAreas() {
@@ -76,5 +66,15 @@ final class StartButtonView: NSView {
             NSColor.labelColor.withAlphaComponent(0.12).setFill()
             NSBezierPath(roundedRect: bounds.insetBy(dx: 2, dy: 3), xRadius: 6, yRadius: 6).fill()
         }
+        let pad: CGFloat = 6
+        let side = min(bounds.width, bounds.height) - pad * 2
+        guard side > 0 else { return }
+        let rect = CGRect(
+            x: (bounds.width - side) / 2,
+            y: (bounds.height - side) / 2,
+            width: side,
+            height: side
+        )
+        StartLogoRenderer.draw(in: rect, palette: palette)
     }
 }

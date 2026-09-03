@@ -35,6 +35,7 @@ final class TaskbarView: NSView {
     required init?(coder: NSCoder) { nil }
 
     func update(items: [TaskItem], settings: AppSettings) {
+        startButton.apply(settings.startLogo)
         self.settings = settings
         if draggingView != nil { return }
         self.items = items

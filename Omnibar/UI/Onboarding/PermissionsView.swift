@@ -154,7 +154,7 @@ struct PermissionsView: View {
                     .font(.title3)
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Hide the macOS Dock").font(.headline)
-                    Text("Keeps the system Dock fully hidden while Omnibar is running, including Mission Control, so the two bars do not overlap. The Dock is restored when you quit.")
+                    Text("Moves the system Dock to the top of the screen and keeps it hidden while Omnibar is running, including Mission Control. The Dock is restored when you quit.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

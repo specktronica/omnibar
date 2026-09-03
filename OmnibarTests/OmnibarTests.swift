@@ -42,6 +42,21 @@ final class OrderStoreTests: XCTestCase {
     }
 }
 
+final class DockOrientationTests: XCTestCase {
+    func testNormalizedKnownEdges() {
+        XCTAssertEqual(DockOrientation.normalized("top"), "top")
+        XCTAssertEqual(DockOrientation.normalized("left"), "left")
+        XCTAssertEqual(DockOrientation.normalized("right"), "right")
+        XCTAssertEqual(DockOrientation.normalized("bottom"), "bottom")
+    }
+
+    func testNormalizedUnknownFallsBackToBottom() {
+        XCTAssertEqual(DockOrientation.normalized(nil), "bottom")
+        XCTAssertEqual(DockOrientation.normalized(""), "bottom")
+        XCTAssertEqual(DockOrientation.normalized("side"), "bottom")
+    }
+}
+
 final class DockStripHidingTests: XCTestCase {
     func testIgnoresWallpaperWindows() {
         XCTAssertFalse(DockStripHiding.isStrip(name: "Wallpaper-", layer: DockStripHiding.dockWindowLevel))
@@ -128,6 +143,72 @@ final class SettingsTests: XCTestCase {
     @MainActor
     func testFullyHideDockDefaultsOn() {
         XCTAssertTrue(AppSettings.default.fullyHideDock)
+    }
+
+    @MainActor
+    func testStartLogoDefaultsToClassic() {
+        XCTAssertEqual(AppSettings.default.startLogo, .classic)
+        XCTAssertEqual(StartLogoTheme.matching(.classic), .classic)
+        XCTAssertEqual(StartLogoPalette.classic.left.hexRGB, 0x1070F0)
+        XCTAssertEqual(StartLogoPalette.classic.top.hexRGB, 0x28C040)
+        XCTAssertEqual(StartLogoPalette.classic.right.hexRGB, 0xF03018)
+        XCTAssertEqual(StartLogoPalette.classic.bottom.hexRGB, 0xF8B000)
+    }
+
+    @MainActor
+    func testStartLogoLegacyJSONUsesClassic() throws {
+        var settings = AppSettings.default
+        settings.transparency = 0.2
+        settings.startButtonAction = .spotlight
+        let data = try JSONEncoder().encode(settings)
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        object.removeValue(forKey: "startLogo")
+        let stripped = try JSONSerialization.data(withJSONObject: object)
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: stripped)
+        XCTAssertEqual(decoded.startLogo, .classic)
+        XCTAssertEqual(decoded.transparency, 0.2)
+        XCTAssertEqual(decoded.startButtonAction, .spotlight)
+    }
+
+    @MainActor
+    func testStartLogoRoundTripCustomPalette() throws {
+        var settings = AppSettings.default
+        settings.startLogo.left = RGBAColor(hex: 0xFF00AA)
+        settings.startLogo.top = RGBAColor(hex: 0x00FFAA)
+        let data = try JSONEncoder().encode(settings)
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: data)
+        XCTAssertEqual(decoded.startLogo.left.hexRGB, 0xFF00AA)
+        XCTAssertEqual(decoded.startLogo.top.hexRGB, 0x00FFAA)
+        XCTAssertEqual(decoded.startLogo.right, StartLogoPalette.classic.right)
+        XCTAssertNil(StartLogoTheme.matching(decoded.startLogo))
+    }
+
+    @MainActor
+    func testStartLogoPresetMatching() {
+        XCTAssertEqual(StartLogoTheme.matching(StartLogoTheme.sunset.palette), .sunset)
+        XCTAssertEqual(StartLogoTheme.matching(StartLogoTheme.ocean.palette), .ocean)
+        var custom = StartLogoPalette.classic
+        custom.left = RGBAColor(hex: 0xFFFFFF)
+        XCTAssertNil(StartLogoTheme.matching(custom))
+    }
+
+    @MainActor
+    func testMatchesExceptStartLogoIgnoresPalette() {
+        var a = AppSettings.default
+        var b = AppSettings.default
+        b.startLogo = StartLogoTheme.neon.palette
+        XCTAssertTrue(a.matchesExceptStartLogo(b))
+        b.taskbarHeight = 48
+        XCTAssertFalse(a.matchesExceptStartLogo(b))
+        a.taskbarHeight = 48
+        XCTAssertTrue(a.matchesExceptStartLogo(b))
+    }
+
+    @MainActor
+    func testBrandIconImageSize() {
+        let image = BrandIcon.image(pointSize: 32, palette: .classic)
+        XCTAssertEqual(image.size, NSSize(width: 32, height: 32))
+        XCTAssertFalse(image.isTemplate)
     }
 }
 

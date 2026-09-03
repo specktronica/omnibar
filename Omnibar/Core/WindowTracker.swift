@@ -16,6 +16,7 @@ final class WindowTracker {
     private var debounceWork: DispatchWorkItem?
     private var lastScan = ScanResult.empty
     private var elementCache: [CGWindowID: AXElementRef] = [:]
+    private var lastSettings: AppSettings = .default
 
     private let ignoredBundleIDs: Set<String> = [
         "com.apple.dock",
@@ -34,6 +35,7 @@ final class WindowTracker {
     func start() {
         guard !isRunning else { return }
         isRunning = true
+        lastSettings = SettingsStore.shared.settings
         registerWorkspaceNotifications()
         refreshObservers()
         schedulePoll()
@@ -86,6 +88,18 @@ final class WindowTracker {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: work)
     }
 
+    private func handleSettingsDidChange() {
+        let settings = SettingsStore.shared.settings
+        let previous = lastSettings
+        lastSettings = settings
+        if settings.matchesExceptStartLogo(previous) {
+            return
+        }
+        schedulePoll()
+        rebuildFromLastScan()
+        requestScan()
+    }
+
     private func schedulePoll() {
         pollTimer?.invalidate()
         let interval = max(0.5, SettingsStore.shared.settings.pollInterval)
@@ -129,9 +143,7 @@ final class WindowTracker {
             let token = NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
                 Task { @MainActor in
                     if name == .omnibarSettingsDidChange {
-                        self?.schedulePoll()
-                        self?.rebuildFromLastScan()
-                        self?.requestScan()
+                        self?.handleSettingsDidChange()
                     } else if name == .omnibarBlacklistDidChange {
                         self?.rebuildFromLastScan()
                         self?.requestScan()

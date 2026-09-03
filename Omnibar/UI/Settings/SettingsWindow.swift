@@ -16,7 +16,7 @@ enum SettingsWindow {
         let window = NSWindow(contentViewController: hosting)
         window.title = "Omnibar Settings"
         window.styleMask = [.titled, .closable, .miniaturizable]
-        window.setContentSize(NSSize(width: 640, height: 520))
+        window.setContentSize(NSSize(width: 640, height: 620))
         window.center()
         let controller = NSWindowController(window: window)
         Self.controller = controller
@@ -40,7 +40,7 @@ struct SettingsRootView: View {
             AdvancedPane(settings: $store.settings).tabItem { Label("Advanced", systemImage: "slider.horizontal.3") }
         }
         .padding(16)
-        .frame(minWidth: 600, minHeight: 460)
+        .frame(minWidth: 600, minHeight: 520)
         // Native NSSwitch uses controlAccentColor, which AppKit draws as
         // graphite when this accessory app's window is not key.
         .toggleStyle(PersistentSwitchToggleStyle())
@@ -143,8 +143,90 @@ private struct AppearancePane: View {
                 Text("Font size")
             }
             Toggle("Hide window titles (icons only)", isOn: $settings.iconOnly)
+            StartLogoSection(settings: $settings)
         }
         .formStyle(.grouped)
+    }
+}
+
+private struct StartLogoSection: View {
+    @Binding var settings: AppSettings
+
+    var body: some View {
+        Section("Start button logo") {
+            HStack(spacing: 14) {
+                StartLogoPreview(palette: settings.startLogo, size: 48)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(StartLogoTheme.matching(settings.startLogo)?.title ?? "Custom")
+                    Text("Choose a preset, or set each lobe.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+            }
+            HStack(spacing: 8) {
+                ForEach(StartLogoTheme.allCases) { theme in
+                    Button {
+                        settings.startLogo = theme.palette
+                    } label: {
+                        StartLogoPreview(palette: theme.palette, size: 28)
+                            .padding(5)
+                            .background(presetBackground(theme))
+                            .overlay(presetBorder(theme))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(theme.title)
+                    .accessibilityAddTraits(isSelected(theme) ? [.isSelected] : [])
+                    .help(theme.title)
+                }
+                Spacer(minLength: 0)
+            }
+            ColorPicker("Left", selection: lobeBinding(\.left), supportsOpacity: false)
+            ColorPicker("Top", selection: lobeBinding(\.top), supportsOpacity: false)
+            ColorPicker("Right", selection: lobeBinding(\.right), supportsOpacity: false)
+            ColorPicker("Bottom", selection: lobeBinding(\.bottom), supportsOpacity: false)
+        }
+    }
+
+    private func isSelected(_ theme: StartLogoTheme) -> Bool {
+        StartLogoTheme.matching(settings.startLogo) == theme
+    }
+
+    private func presetBackground(_ theme: StartLogoTheme) -> some View {
+        RoundedRectangle(cornerRadius: 8, style: .continuous)
+            .fill(isSelected(theme) ? PersistentAccent.color.opacity(0.16) : Color.clear)
+    }
+
+    private func presetBorder(_ theme: StartLogoTheme) -> some View {
+        RoundedRectangle(cornerRadius: 8, style: .continuous)
+            .strokeBorder(
+                isSelected(theme) ? PersistentAccent.color : Color.secondary.opacity(0.22),
+                lineWidth: isSelected(theme) ? 1.5 : 1
+            )
+    }
+
+    private func lobeBinding(_ keyPath: WritableKeyPath<StartLogoPalette, RGBAColor>) -> Binding<Color> {
+        Binding(
+            get: { Color(nsColor: settings.startLogo[keyPath: keyPath].nsColor) },
+            set: { newColor in
+                var palette = settings.startLogo
+                palette[keyPath: keyPath] = RGBAColor(nsColor: NSColor(newColor))
+                settings.startLogo = palette
+            }
+        )
+    }
+}
+
+private struct StartLogoPreview: View {
+    var palette: StartLogoPalette
+    var size: CGFloat
+
+    var body: some View {
+        Image(nsImage: BrandIcon.image(pointSize: size, palette: palette))
+            .resizable()
+            .interpolation(.high)
+            .frame(width: size, height: size)
+            .accessibilityHidden(true)
     }
 }
 

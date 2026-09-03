@@ -39,10 +39,12 @@ enum IconCache {
 
 enum BrandIcon {
     /// In-app mark. Avoid `applicationIconName`: macOS plates that image onto a rounded square.
-    static func image(pointSize: CGFloat) -> NSImage? {
-        guard let base = NSImage(named: "BrandLogo") else { return nil }
-        guard let image = base.copy() as? NSImage else { return base }
-        image.size = NSSize(width: pointSize, height: pointSize)
+    static func image(pointSize: CGFloat, palette: StartLogoPalette = .classic) -> NSImage {
+        let size = NSSize(width: pointSize, height: pointSize)
+        let image = NSImage(size: size, flipped: false) { rect in
+            StartLogoRenderer.draw(in: rect, palette: palette)
+            return true
+        }
         image.isTemplate = false
         return image
     }
@@ -58,68 +60,24 @@ enum BrandIcon {
         return image
     }
 
-    /// Four equal circles packed in a larger circle; center curvilinear diamond filled.
     nonisolated private static func drawMenuBarGlyph(in rect: NSRect) {
-        let inset = max(1 as CGFloat, rect.width * 0.07)
-        let bounds = rect.insetBy(dx: inset, dy: inset)
-        let cx = bounds.midX
-        let cy = bounds.midY
-        let outerR = min(bounds.width, bounds.height) / 2
-        let root2 = CGFloat(2).squareRoot()
-        let innerR = outerR / (1 + root2)
-        let offset = innerR * root2
+        let packing = StartLogoPacking(rect: rect)
+        guard packing.outerR > 0.5 else { return }
 
         NSColor.black.set()
+        packing.centerDiamond.fill()
 
-        let center = NSBezierPath()
-        addInnerArc(to: center, cx: cx + offset, cy: cy, radius: innerR, from: 225, to: 135, clockwise: true)
-        addInnerArc(to: center, cx: cx, cy: cy + offset, radius: innerR, from: 315, to: 225, clockwise: true)
-        addInnerArc(to: center, cx: cx - offset, cy: cy, radius: innerR, from: 45, to: 315, clockwise: true)
-        addInnerArc(to: center, cx: cx, cy: cy - offset, radius: innerR, from: 135, to: 45, clockwise: true)
-        center.close()
-        center.fill()
-
-        let lineWidth = max(1 as CGFloat, outerR * 0.13)
-        strokeCircle(cx: cx, cy: cy, radius: outerR, lineWidth: lineWidth)
-        strokeCircle(cx: cx + offset, cy: cy, radius: innerR, lineWidth: lineWidth)
-        strokeCircle(cx: cx - offset, cy: cy, radius: innerR, lineWidth: lineWidth)
-        strokeCircle(cx: cx, cy: cy + offset, radius: innerR, lineWidth: lineWidth)
-        strokeCircle(cx: cx, cy: cy - offset, radius: innerR, lineWidth: lineWidth)
+        let lineWidth = max(1 as CGFloat, packing.outerR * 0.13)
+        stroke(packing.outerCircle, lineWidth: lineWidth)
+        stroke(packing.lobe(dx: 1, dy: 0), lineWidth: lineWidth)
+        stroke(packing.lobe(dx: -1, dy: 0), lineWidth: lineWidth)
+        stroke(packing.lobe(dx: 0, dy: 1), lineWidth: lineWidth)
+        stroke(packing.lobe(dx: 0, dy: -1), lineWidth: lineWidth)
     }
 
-    nonisolated private static func strokeCircle(cx: CGFloat, cy: CGFloat, radius: CGFloat, lineWidth: CGFloat) {
-        let path = NSBezierPath(
-            ovalIn: NSRect(x: cx - radius, y: cy - radius, width: radius * 2, height: radius * 2)
-        )
+    nonisolated private static func stroke(_ path: NSBezierPath, lineWidth: CGFloat) {
         path.lineWidth = lineWidth
         path.lineJoinStyle = .round
         path.stroke()
-    }
-
-    nonisolated private static func addInnerArc(
-        to path: NSBezierPath,
-        cx: CGFloat,
-        cy: CGFloat,
-        radius: CGFloat,
-        from startDeg: CGFloat,
-        to endDeg: CGFloat,
-        clockwise: Bool
-    ) {
-        let start = startDeg * .pi / 180
-        let end = endDeg * .pi / 180
-        var delta = end - start
-        if clockwise, delta > 0 { delta -= 2 * .pi }
-        if !clockwise, delta < 0 { delta += 2 * .pi }
-        let steps = 20
-        for i in 0...steps {
-            let t = CGFloat(i) / CGFloat(steps)
-            let angle = start + delta * t
-            let point = NSPoint(x: cx + radius * cos(angle), y: cy + radius * sin(angle))
-            if path.elementCount == 0 {
-                path.move(to: point)
-            } else {
-                path.line(to: point)
-            }
-        }
     }
 }
