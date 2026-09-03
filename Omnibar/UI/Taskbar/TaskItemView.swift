@@ -113,7 +113,7 @@ final class TaskItemView: NSView {
     override func mouseUp(with event: NSEvent) {
         if dragging {
             onDragEnded?(self, event)
-        } else if event.clickCount == 1 {
+        } else {
             onClick?(item)
         }
         dragging = false

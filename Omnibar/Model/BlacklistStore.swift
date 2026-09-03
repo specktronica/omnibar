@@ -5,11 +5,13 @@ import Observation
 final class BlacklistStore {
     static let shared = BlacklistStore()
 
-    private let defaultsKey = "omnibar.blacklist.v1"
+    static let defaultsKey = "omnibar.blacklist.v1"
+    private let defaults: UserDefaults
     private(set) var bundleIDs: Set<String>
 
-    init() {
-        let array = UserDefaults.standard.stringArray(forKey: defaultsKey) ?? []
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        let array = defaults.stringArray(forKey: Self.defaultsKey) ?? []
         bundleIDs = Set(array)
     }
 
@@ -34,7 +36,7 @@ final class BlacklistStore {
     }
 
     private func persist() {
-        UserDefaults.standard.set(Array(bundleIDs).sorted(), forKey: defaultsKey)
+        defaults.set(Array(bundleIDs).sorted(), forKey: Self.defaultsKey)
         NotificationCenter.default.post(name: .omnibarBlacklistDidChange, object: nil)
     }
 }

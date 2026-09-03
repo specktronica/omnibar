@@ -268,14 +268,10 @@ final class WindowTracker {
 
     private func rebuildItems(from scan: ScanResult) {
         let settings = SettingsStore.shared.settings
-        var windows = scan.windows
-        if !BlacklistStore.shared.bundleIDs.isEmpty {
-            let blocked = BlacklistStore.shared.bundleIDs
-            windows = windows.filter { window in
-                guard let bundleID = window.bundleID else { return true }
-                return !blocked.contains(bundleID)
-            }
-        }
+        let windows = TaskListLogic.excludingBlacklisted(
+            scan.windows,
+            bundleIDs: BlacklistStore.shared.bundleIDs
+        )
 
         let keys = windows.map(\.orderKey)
         let keySet = Set(keys)

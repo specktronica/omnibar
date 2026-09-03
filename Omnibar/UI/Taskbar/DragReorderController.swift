@@ -39,4 +39,33 @@ final class DragReorderController {
         }
         return (pins, windowKeys)
     }
+
+    /// Pin-preserving drop used by the taskbar: window/group tiles of already-pinned
+    /// apps stay in the pin list, and unused pins are appended after the dragged pins.
+    static func commitTaskbar(
+        items: [TaskItem],
+        existingPins: [String]
+    ) -> (pins: [String]?, windowKeys: [String]) {
+        var pinIDs: [String] = []
+        var windowKeys: [String] = []
+        let currentlyPinned = Set(existingPins)
+        for item in items {
+            switch item.kind {
+            case .pinned(let id, _, _, _):
+                pinIDs.append(id)
+            case .window(let window):
+                if let bundle = window.bundleID, currentlyPinned.contains(bundle), !pinIDs.contains(bundle) {
+                    pinIDs.append(bundle)
+                }
+                windowKeys.append(window.orderKey)
+            case .grouped(let bundleID, _, let windows, _):
+                if let bundleID, currentlyPinned.contains(bundleID), !pinIDs.contains(bundleID) {
+                    pinIDs.append(bundleID)
+                }
+                windowKeys.append(contentsOf: windows.map(\.orderKey))
+            }
+        }
+        let pins: [String]? = pinIDs.isEmpty ? nil : pinIDs + existingPins.filter { !pinIDs.contains($0) }
+        return (pins, windowKeys)
+    }
 }

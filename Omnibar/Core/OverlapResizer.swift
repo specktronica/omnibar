@@ -1,6 +1,44 @@
 import AppKit
 import Foundation
 
+enum OverlapGeometry {
+    static func shouldConsider(
+        _ window: WindowInfo,
+        skipBundles: Set<String>,
+        skippedPIDs: Set<pid_t>
+    ) -> Bool {
+        if window.isFullscreen || window.isMinimized || window.isHidden { return false }
+        if let bundle = window.bundleID, skipBundles.contains(bundle) { return false }
+        if skippedPIDs.contains(window.pid) { return false }
+        return true
+    }
+
+    static func proposedHeight(windowCocoa: CGRect, bar: CGRect) -> CGFloat? {
+        let intersection = windowCocoa.intersection(bar)
+        guard !intersection.isNull, intersection.height > 1 else { return nil }
+        let newHeight = max(80, windowCocoa.height - intersection.height)
+        guard abs(newHeight - windowCocoa.height) > 1 else { return nil }
+        return newHeight
+    }
+
+    static func recordVerifyResult(
+        stillOverlaps: Bool,
+        pid: pid_t,
+        failCounts: inout [pid_t: Int],
+        skippedPIDs: inout Set<pid_t>
+    ) {
+        if stillOverlaps {
+            let count = (failCounts[pid] ?? 0) + 1
+            failCounts[pid] = count
+            if count >= 2 {
+                skippedPIDs.insert(pid)
+            }
+        } else {
+            failCounts[pid] = 0
+        }
+    }
+}
+
 final class OverlapResizer {
     static let shared = OverlapResizer()
 
@@ -37,16 +75,14 @@ final class OverlapResizer {
         for screen in NSScreen.screens {
             let bar = ScreenGeometry.taskbarFrame(on: screen, height: height)
             for window in windows {
-                if window.isFullscreen || window.isMinimized || window.isHidden { continue }
-                if let bundle = window.bundleID, skip.contains(bundle) { continue }
-                if skippedPIDs.contains(window.pid) { continue }
+                guard OverlapGeometry.shouldConsider(
+                    window,
+                    skipBundles: skip,
+                    skippedPIDs: skippedPIDs
+                ) else { continue }
                 guard window.screenID == screen.displayID || settings.showWindowsFromAllScreens else { continue }
                 let cocoa = ScreenGeometry.cocoaRect(fromCGRect: window.frame)
-                let intersection = cocoa.intersection(bar)
-                guard !intersection.isNull, intersection.height > 1 else { continue }
-
-                let newHeight = max(80, cocoa.height - intersection.height)
-                guard abs(newHeight - cocoa.height) > 1 else { continue }
+                guard let newHeight = OverlapGeometry.proposedHeight(windowCocoa: cocoa, bar: bar) else { continue }
                 guard let element = WindowTracker.shared.axElement(for: window.id)
                     ?? AXBridge.element(forWindowID: window.id, pid: window.pid) else { continue }
 
@@ -75,14 +111,12 @@ final class OverlapResizer {
             )
         }
         let intersection = cocoa.intersection(bar)
-        if !intersection.isNull, intersection.height > 4 {
-            let count = (failCounts[window.pid] ?? 0) + 1
-            failCounts[window.pid] = count
-            if count >= 2 {
-                skippedPIDs.insert(window.pid)
-            }
-        } else {
-            failCounts[window.pid] = 0
-        }
+        let stillOverlaps = !intersection.isNull && intersection.height > 4
+        OverlapGeometry.recordVerifyResult(
+            stillOverlaps: stillOverlaps,
+            pid: window.pid,
+            failCounts: &failCounts,
+            skippedPIDs: &skippedPIDs
+        )
     }
 }

@@ -15,14 +15,19 @@ final class AppCatalog {
     private(set) var recents: [CatalogApp] = []
     private(set) var grouped: [(letter: String, apps: [CatalogApp])] = []
     private var sources: [DispatchSourceFileSystemObject] = []
-    private let recentsKey = "omnibar.recents.v1"
+    static let recentsKey = "omnibar.recents.v1"
+    private let defaults: UserDefaults
     private var workspaceTokens: [NSObjectProtocol] = []
     private var scanGeneration = 0
     private var debounceWork: DispatchWorkItem?
     private static let scanQueue = DispatchQueue(label: "io.specktronica.omnibar.catalog", qos: .utility)
 
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+    }
+
     func start() {
-        let saved = UserDefaults.standard.stringArray(forKey: recentsKey) ?? []
+        let saved = defaults.stringArray(forKey: Self.recentsKey) ?? []
         recents = saved.compactMap { bundleID in
             catalogApp(bundleID: bundleID)
         }
@@ -77,17 +82,37 @@ final class AppCatalog {
     }
 
     func recordLaunch(bundleID: String) {
-        guard bundleID != "io.specktronica.omnibar" else { return }
-        recents.removeAll { $0.bundleID == bundleID }
-        if let app = apps.first(where: { $0.bundleID == bundleID }) ?? catalogApp(bundleID: bundleID) {
-            recents.insert(app, at: 0)
-        }
-        let limit = max(1, SettingsStore.shared.settings.recentAppsLimit)
-        if recents.count > limit {
-            recents = Array(recents.prefix(limit))
-        }
-        UserDefaults.standard.set(recents.map(\.bundleID), forKey: recentsKey)
+        let next = Self.updatedRecents(
+            bundleID: bundleID,
+            recents: recents,
+            apps: apps,
+            limit: SettingsStore.shared.settings.recentAppsLimit,
+            resolved: { catalogApp(bundleID: $0) }
+        )
+        guard next != recents else { return }
+        recents = next
+        defaults.set(recents.map(\.bundleID), forKey: Self.recentsKey)
         NotificationCenter.default.post(name: .omnibarCatalogDidChange, object: nil)
+    }
+
+    nonisolated static func updatedRecents(
+        bundleID: String,
+        recents: [CatalogApp],
+        apps: [CatalogApp],
+        limit: Int,
+        selfBundleID: String = "io.specktronica.omnibar",
+        resolved: (String) -> CatalogApp?
+    ) -> [CatalogApp] {
+        guard bundleID != selfBundleID else { return recents }
+        var next = recents.filter { $0.bundleID != bundleID }
+        if let app = apps.first(where: { $0.bundleID == bundleID }) ?? resolved(bundleID) {
+            next.insert(app, at: 0)
+        }
+        let cap = max(1, limit)
+        if next.count > cap {
+            next = Array(next.prefix(cap))
+        }
+        return next
     }
 
     func search(_ query: String) -> [CatalogApp] {
@@ -120,14 +145,25 @@ final class AppCatalog {
     }
 
     func launch(_ app: CatalogApp) {
-        NSWorkspace.shared.openApplication(at: app.url, configuration: NSWorkspace.OpenConfiguration())
+        openAndFocus(url: app.url)
         recordLaunch(bundleID: app.bundleID)
     }
 
     func launch(bundleID: String) {
         guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else { return }
-        NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
+        openAndFocus(url: url)
         recordLaunch(bundleID: bundleID)
+    }
+
+    private func openAndFocus(url: URL) {
+        let config = NSWorkspace.OpenConfiguration()
+        config.activates = true
+        NSWorkspace.shared.openApplication(at: url, configuration: config) { app, _ in
+            guard let app else { return }
+            Task { @MainActor in
+                WindowActions.activate(app)
+            }
+        }
     }
 
     private func catalogApp(bundleID: String) -> CatalogApp? {

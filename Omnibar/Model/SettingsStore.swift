@@ -5,7 +5,11 @@ import Observation
 final class SettingsStore {
     static let shared = SettingsStore()
 
-    private let defaultsKey = "omnibar.settings.v1"
+    static let defaultsKey = "omnibar.settings.v1"
+    private let defaults: UserDefaults
+    private let syncLoginItem: (Bool) -> Void
+    private let applyDockFromSettings: () -> Void
+    private let revertDock: () -> Void
     private var isLoading = false
 
     var settings: AppSettings {
@@ -14,16 +18,25 @@ final class SettingsStore {
             persist()
             NotificationCenter.default.post(name: .omnibarSettingsDidChange, object: nil)
             if oldValue.launchAtLogin != settings.launchAtLogin {
-                LoginItem.sync(enabled: settings.launchAtLogin)
+                syncLoginItem(settings.launchAtLogin)
             }
             if oldValue.fullyHideDock != settings.fullyHideDock {
-                DockManager.shared.applyFromSettings()
+                applyDockFromSettings()
             }
         }
     }
 
-    init() {
-        if let data = UserDefaults.standard.data(forKey: "omnibar.settings.v1"),
+    init(
+        defaults: UserDefaults = .standard,
+        syncLoginItem: @escaping (Bool) -> Void = { LoginItem.sync(enabled: $0) },
+        applyDockFromSettings: @escaping () -> Void = { DockManager.shared.applyFromSettings() },
+        revertDock: @escaping () -> Void = { DockManager.shared.revertIfNeeded() }
+    ) {
+        self.defaults = defaults
+        self.syncLoginItem = syncLoginItem
+        self.applyDockFromSettings = applyDockFromSettings
+        self.revertDock = revertDock
+        if let data = defaults.data(forKey: Self.defaultsKey),
            let decoded = try? JSONDecoder().decode(AppSettings.self, from: data) {
             settings = decoded
         } else {
@@ -33,12 +46,12 @@ final class SettingsStore {
 
     func load() {
         isLoading = true
-        if let data = UserDefaults.standard.data(forKey: defaultsKey),
+        if let data = defaults.data(forKey: Self.defaultsKey),
            let decoded = try? JSONDecoder().decode(AppSettings.self, from: data) {
             settings = decoded
         }
         isLoading = false
-        LoginItem.sync(enabled: settings.launchAtLogin)
+        syncLoginItem(settings.launchAtLogin)
     }
 
     func update(_ mutate: (inout AppSettings) -> Void) {
@@ -49,15 +62,16 @@ final class SettingsStore {
 
     func resetToDefaults() {
         let launch = settings.launchAtLogin
-        settings = .default
-        settings.launchAtLogin = launch
-        DockManager.shared.revertIfNeeded()
+        var next = AppSettings.default
+        next.launchAtLogin = launch
+        settings = next
+        revertDock()
         OrderStore.shared.reset()
     }
 
     private func persist() {
         if let data = try? JSONEncoder().encode(settings) {
-            UserDefaults.standard.set(data, forKey: defaultsKey)
+            defaults.set(data, forKey: Self.defaultsKey)
         }
     }
 }

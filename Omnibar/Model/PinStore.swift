@@ -5,11 +5,13 @@ import Observation
 final class PinStore {
     static let shared = PinStore()
 
-    private let defaultsKey = "omnibar.pins.v1"
+    static let defaultsKey = "omnibar.pins.v1"
+    private let defaults: UserDefaults
     private(set) var pinnedBundleIDs: [String]
 
-    init() {
-        pinnedBundleIDs = UserDefaults.standard.stringArray(forKey: defaultsKey) ?? []
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        pinnedBundleIDs = defaults.stringArray(forKey: Self.defaultsKey) ?? []
     }
 
     func isPinned(_ bundleID: String) -> Bool {
@@ -51,7 +53,7 @@ final class PinStore {
     }
 
     private func persist() {
-        UserDefaults.standard.set(pinnedBundleIDs, forKey: defaultsKey)
+        defaults.set(pinnedBundleIDs, forKey: Self.defaultsKey)
         NotificationCenter.default.post(name: .omnibarPinsDidChange, object: nil)
     }
 }

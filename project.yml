@@ -73,7 +73,11 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: io.specktronica.omnibar.tests
         GENERATE_INFOPLIST_FILE: YES
-        CODE_SIGN_IDENTITY: "-"
+        # Must share the host app's team; ad-hoc ("-") fails TEST_HOST load with
+        # "mapping process and mapped file have different Team IDs".
+        CODE_SIGN_IDENTITY: "Apple Development"
+        DEVELOPMENT_TEAM: Y3QXTYSC64
+        CODE_SIGN_STYLE: Manual
         LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks @loader_path/../Frameworks"
         TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Omnibar.app/Contents/MacOS/Omnibar"
         BUNDLE_LOADER: "$(TEST_HOST)"

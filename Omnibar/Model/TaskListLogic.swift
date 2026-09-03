@@ -2,6 +2,14 @@ import AppKit
 import Foundation
 
 enum TaskListLogic {
+    static func excludingBlacklisted(_ windows: [WindowInfo], bundleIDs: Set<String>) -> [WindowInfo] {
+        guard !bundleIDs.isEmpty else { return windows }
+        return windows.filter { window in
+            guard let bundleID = window.bundleID else { return true }
+            return !bundleIDs.contains(bundleID)
+        }
+    }
+
     static func windows(
         from windows: [WindowInfo],
         onScreen screenID: CGDirectDisplayID,

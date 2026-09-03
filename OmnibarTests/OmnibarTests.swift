@@ -496,10 +496,13 @@ final class TaskItemMiddleClickTests: XCTestCase {
         let view = TaskItemView(item: item, settings: .default)
         view.frame = NSRect(x: 0, y: 0, width: 48, height: 38)
         var middle = false
+        var left = false
         view.onMiddleClick = { _ in middle = true }
+        view.onClick = { _ in left = true }
         view.mouseDown(with: mouseEvent(type: .leftMouseDown, button: .left, location: NSPoint(x: 24, y: 19)))
         view.mouseUp(with: mouseEvent(type: .leftMouseUp, button: .left, location: NSPoint(x: 24, y: 19)))
         XCTAssertFalse(middle)
+        XCTAssertTrue(left)
     }
 
     @MainActor
@@ -761,23 +764,6 @@ final class TaskbarSnapshotUITests: XCTestCase {
     }
 }
 
-@MainActor
-@discardableResult
-private func makeStubApp(named name: String, bundleID: String, in directory: URL) throws -> URL {
-    let app = directory.appendingPathComponent("\(name).app")
-    let contents = app.appendingPathComponent("Contents")
-    try FileManager.default.createDirectory(at: contents, withIntermediateDirectories: true)
-    let plist: [String: Any] = [
-        "CFBundleIdentifier": bundleID,
-        "CFBundleName": name,
-        "CFBundlePackageType": "APPL",
-        "CFBundleExecutable": name
-    ]
-    let data = try PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0)
-    try data.write(to: contents.appendingPathComponent("Info.plist"))
-    return app
-}
-
 final class ScanCoalescerTests: XCTestCase {
     func testCoalescesWhileScanIsInFlight() {
         var coalescer = ScanCoalescer()
@@ -831,33 +817,4 @@ final class ScreenGeometryTests: XCTestCase {
         )
         XCTAssertEqual(right, 2)
     }
-}
-
-@MainActor
-func stubWindow(
-    id: CGWindowID,
-    bundle: String? = "com.example.app",
-    title: String = "Title",
-    pid: pid_t = 42,
-    screen: CGDirectDisplayID = 1,
-    spaces: [UInt64] = [10],
-    minimized: Bool = false
-) -> WindowInfo {
-    WindowInfo(
-        id: id,
-        pid: pid,
-        bundleID: bundle,
-        appName: bundle ?? "App",
-        title: title,
-        frame: CGRect(x: 0, y: 0, width: 800, height: 600),
-        screenID: screen,
-        spaces: spaces,
-        isMinimized: minimized,
-        isHidden: false,
-        isFullscreen: false,
-        isOnScreen: true,
-        isTabbed: false,
-        isActive: false,
-        layer: 0
-    )
 }
