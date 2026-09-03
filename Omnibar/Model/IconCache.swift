@@ -1,28 +1,40 @@
 import AppKit
 import Foundation
 
-enum IconCache {
-    private static var cache: [String: NSImage] = [:]
-    private static var names: [String: String] = [:]
+enum IconCache: Sendable {
+    nonisolated private final class Storage: @unchecked Sendable {
+        let lock = NSLock()
+        var cache: [String: NSImage] = [:]
+        var names: [String: String] = [:]
+    }
 
-    static func icon(forBundleID bundleID: String) -> NSImage? {
-        if let cached = cache[bundleID] { return cached }
+    nonisolated private static let storage = Storage()
+
+    nonisolated static func icon(forBundleID bundleID: String) -> NSImage? {
+        if let cached = cachedImage(bundleID) { return cached }
         guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else { return nil }
-        let image = NSWorkspace.shared.icon(forFile: url.path)
-        cache[bundleID] = image
-        return image
+        return store(NSWorkspace.shared.icon(forFile: url.path), key: bundleID)
     }
 
-    static func icon(for url: URL) -> NSImage {
+    nonisolated static func icon(for url: URL) -> NSImage {
         let key = url.path
-        if let cached = cache[key] { return cached }
-        let image = NSWorkspace.shared.icon(forFile: url.path)
-        cache[key] = image
-        return image
+        if let cached = cachedImage(key) { return cached }
+        return store(NSWorkspace.shared.icon(forFile: url.path), key: key)
     }
 
-    static func appName(for bundleID: String) -> String {
-        if let cached = names[bundleID] { return cached }
+    nonisolated static func prefetch(urls: [URL]) {
+        for url in urls {
+            _ = icon(for: url)
+        }
+    }
+
+    nonisolated static func appName(for bundleID: String) -> String {
+        storage.lock.lock()
+        if let cached = storage.names[bundleID] {
+            storage.lock.unlock()
+            return cached
+        }
+        storage.lock.unlock()
         var name = bundleID
         if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID),
            let bundle = Bundle(url: url) {
@@ -32,8 +44,24 @@ enum IconCache {
                 name = bundleName
             }
         }
-        names[bundleID] = name
+        storage.lock.lock()
+        storage.names[bundleID] = name
+        storage.lock.unlock()
         return name
+    }
+
+    nonisolated private static func cachedImage(_ key: String) -> NSImage? {
+        storage.lock.lock()
+        defer { storage.lock.unlock() }
+        return storage.cache[key]
+    }
+
+    @discardableResult
+    nonisolated private static func store(_ image: NSImage, key: String) -> NSImage {
+        storage.lock.lock()
+        storage.cache[key] = image
+        storage.lock.unlock()
+        return image
     }
 }
 

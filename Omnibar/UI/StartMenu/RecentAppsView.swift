@@ -6,6 +6,7 @@ final class RecentAppsView: NSView {
     private let header = NSTextField(labelWithString: "Recent Apps")
     private var rows: [NSButton] = []
     private var apps: [AppCatalog.CatalogApp] = []
+    private var renderedIDs: [String] = []
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -16,19 +17,38 @@ final class RecentAppsView: NSView {
     required init?(coder: NSCoder) { nil }
 
     func update(_ apps: [AppCatalog.CatalogApp]) {
-        self.apps = apps
-        rows.forEach { $0.removeFromSuperview() }
-        rows = apps.enumerated().map { index, app in
-            let button = NSButton(title: " \(app.name)", target: self, action: #selector(tap(_:)))
-            button.bezelStyle = .shadowlessSquare
-            button.isBordered = false
-            button.image = IconCache.icon(for: app.url)
-            button.imagePosition = .imageLeft
-            button.alignment = .left
-            button.tag = index
-            addSubview(button)
-            return button
+        let ids = apps.map(\.id)
+        if ids == renderedIDs, rows.count == apps.count {
+            self.apps = apps
+            return
         }
+        renderedIDs = ids
+        self.apps = apps
+
+        var next: [NSButton] = []
+        for (index, app) in apps.enumerated() {
+            let button: NSButton
+            if index < rows.count {
+                button = rows[index]
+            } else {
+                button = NSButton(title: "", target: self, action: #selector(tap(_:)))
+                button.bezelStyle = .shadowlessSquare
+                button.isBordered = false
+                button.imagePosition = .imageLeft
+                button.alignment = .left
+                addSubview(button)
+            }
+            button.title = " \(app.name)"
+            button.image = IconCache.icon(for: app.url)
+            button.tag = index
+            next.append(button)
+        }
+        if next.count < rows.count {
+            for extra in rows[next.count...] {
+                extra.removeFromSuperview()
+            }
+        }
+        rows = next
         needsLayout = true
     }
 

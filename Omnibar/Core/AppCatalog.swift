@@ -4,7 +4,7 @@ import Foundation
 final class AppCatalog {
     static let shared = AppCatalog()
 
-    struct CatalogApp: Identifiable, Hashable {
+    struct CatalogApp: Identifiable, Hashable, Sendable {
         var id: String { bundleID + url.path }
         let bundleID: String
         let name: String
@@ -13,17 +13,21 @@ final class AppCatalog {
 
     private(set) var apps: [CatalogApp] = []
     private(set) var recents: [CatalogApp] = []
+    private(set) var grouped: [(letter: String, apps: [CatalogApp])] = []
     private var sources: [DispatchSourceFileSystemObject] = []
     private let recentsKey = "omnibar.recents.v1"
     private var workspaceTokens: [NSObjectProtocol] = []
+    private var scanGeneration = 0
+    private var debounceWork: DispatchWorkItem?
+    private static let scanQueue = DispatchQueue(label: "io.specktronica.omnibar.catalog", qos: .utility)
 
     func start() {
-        refresh()
-        watch()
         let saved = UserDefaults.standard.stringArray(forKey: recentsKey) ?? []
         recents = saved.compactMap { bundleID in
-            apps.first { $0.bundleID == bundleID } ?? catalogApp(bundleID: bundleID)
+            catalogApp(bundleID: bundleID)
         }
+        refresh()
+        watch()
         let token = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didLaunchApplicationNotification,
             object: nil,
@@ -40,6 +44,8 @@ final class AppCatalog {
     }
 
     func stop() {
+        debounceWork?.cancel()
+        debounceWork = nil
         sources.forEach { $0.cancel() }
         sources.removeAll()
         workspaceTokens.forEach { NSWorkspace.shared.notificationCenter.removeObserver($0) }
@@ -54,11 +60,14 @@ final class AppCatalog {
     ]
 
     func refresh() {
-        apps = collectApps(from: Self.defaultDirectories)
-        NotificationCenter.default.post(name: .omnibarCatalogDidChange, object: nil)
+        scheduleScan(delay: 0)
     }
 
     func collectApps(from directories: [URL]) -> [CatalogApp] {
+        Self.collectApps(from: directories)
+    }
+
+    nonisolated static func collectApps(from directories: [URL]) -> [CatalogApp] {
         var found: [CatalogApp] = []
         var seen = Set<String>()
         for directory in directories {
@@ -82,22 +91,32 @@ final class AppCatalog {
     }
 
     func search(_ query: String) -> [CatalogApp] {
-        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return apps }
-        return apps.filter { $0.name.localizedCaseInsensitiveContains(trimmed) }
+        Self.filter(apps, query: query)
     }
 
-    func groupedByLetter(_ list: [CatalogApp]) -> [(letter: String, apps: [CatalogApp])] {
-        let grouped = Dictionary(grouping: list) { app -> String in
-            let first = app.name.first.map { String($0).uppercased() } ?? "#"
-            if first.range(of: "[A-Z]", options: .regularExpression) != nil {
-                return first
+    func groups(matching query: String) -> [(letter: String, apps: [CatalogApp])] {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { return grouped }
+        return groupedByLetter(Self.filter(apps, query: trimmed))
+    }
+
+    nonisolated func groupedByLetter(_ list: [CatalogApp]) -> [(letter: String, apps: [CatalogApp])] {
+        Self.groupedByLetter(list)
+    }
+
+    nonisolated static func groupedByLetter(_ list: [CatalogApp]) -> [(letter: String, apps: [CatalogApp])] {
+        guard !list.isEmpty else { return [] }
+        let sorted = list.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        var result: [(letter: String, apps: [CatalogApp])] = []
+        for app in sorted {
+            let letter = letter(for: app.name)
+            if result.last?.letter == letter {
+                result[result.count - 1].apps.append(app)
+            } else {
+                result.append((letter, [app]))
             }
-            return "#"
         }
-        return grouped.keys.sorted().map { letter in
-            (letter, grouped[letter]!.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending })
-        }
+        return result
     }
 
     func launch(_ app: CatalogApp) {
@@ -116,7 +135,67 @@ final class AppCatalog {
         return CatalogApp(bundleID: bundleID, name: IconCache.appName(for: bundleID), url: url)
     }
 
-    private func scan(directory: URL, seen: inout Set<String>) -> [CatalogApp] {
+    nonisolated static func filter(_ list: [CatalogApp], query: String) -> [CatalogApp] {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return list }
+        return list.filter { $0.name.localizedCaseInsensitiveContains(trimmed) }
+    }
+
+    nonisolated static func letter(for name: String) -> String {
+        guard let first = name.first else { return "#" }
+        let upper = String(first).uppercased()
+        guard let character = upper.first, character >= "A", character <= "Z" else { return "#" }
+        return String(character)
+    }
+
+    private func scheduleScan(delay: TimeInterval) {
+        debounceWork?.cancel()
+        if delay <= 0 {
+            beginScan()
+            return
+        }
+        let work = DispatchWorkItem {
+            Task { @MainActor in
+                AppCatalog.shared.beginScan()
+            }
+        }
+        debounceWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
+    }
+
+    private func beginScan() {
+        debounceWork?.cancel()
+        debounceWork = nil
+        scanGeneration += 1
+        let generation = scanGeneration
+        let directories = Self.defaultDirectories
+        Self.scanQueue.async {
+            let found = AppCatalog.collectApps(from: directories)
+            Task { @MainActor in
+                AppCatalog.shared.finishScan(generation: generation, found: found)
+            }
+        }
+    }
+
+    private func finishScan(generation: Int, found: [CatalogApp]) {
+        guard generation == scanGeneration else { return }
+        applyScan(found)
+    }
+
+    private func applyScan(_ found: [CatalogApp]) {
+        apps = found
+        grouped = Self.groupedByLetter(found)
+        recents = recents.compactMap { recent in
+            found.first { $0.bundleID == recent.bundleID } ?? recent
+        }
+        NotificationCenter.default.post(name: .omnibarCatalogDidChange, object: nil)
+        let urls = found.map(\.url)
+        Task.detached(priority: .utility) {
+            IconCache.prefetch(urls: urls)
+        }
+    }
+
+    nonisolated private static func scan(directory: URL, seen: inout Set<String>) -> [CatalogApp] {
         let fm = FileManager.default
         guard let contents = try? fm.contentsOfDirectory(
             at: directory,
@@ -146,11 +225,11 @@ final class AppCatalog {
         return result
     }
 
-    private func isAppBundle(_ url: URL) -> Bool {
+    nonisolated private static func isAppBundle(_ url: URL) -> Bool {
         url.pathExtension.lowercased() == "app"
     }
 
-    private func isDirectory(_ url: URL) -> Bool {
+    nonisolated private static func isDirectory(_ url: URL) -> Bool {
         if let values = try? url.resourceValues(forKeys: [.isDirectoryKey, .isPackageKey]) {
             return values.isDirectory == true && values.isPackage != true
         }
@@ -158,7 +237,11 @@ final class AppCatalog {
         return FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir) && isDir.boolValue && !isAppBundle(url)
     }
 
-    func catalogApp(from url: URL) -> CatalogApp? {
+    nonisolated func catalogApp(from url: URL) -> CatalogApp? {
+        Self.catalogApp(from: url)
+    }
+
+    nonisolated static func catalogApp(from url: URL) -> CatalogApp? {
         let resolved = url.resolvingSymlinksInPath()
         guard isAppBundle(resolved) else { return nil }
         let info = infoDictionary(forAppAt: resolved)
@@ -170,7 +253,7 @@ final class AppCatalog {
         return CatalogApp(bundleID: bundleID, name: name, url: resolved)
     }
 
-    private func infoDictionary(forAppAt url: URL) -> [String: Any]? {
+    nonisolated private static func infoDictionary(forAppAt url: URL) -> [String: Any]? {
         let candidates = [
             url.appendingPathComponent("Contents/Info.plist"),
             url.appendingPathComponent("Wrapper/Info.plist")
@@ -183,7 +266,7 @@ final class AppCatalog {
         return Bundle(url: url)?.infoDictionary
     }
 
-    private func appName(from info: [String: Any]?, bundle: Bundle?, url: URL) -> String {
+    nonisolated private static func appName(from info: [String: Any]?, bundle: Bundle?, url: URL) -> String {
         if let bundle {
             if let display = bundle.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String, !display.isEmpty {
                 return display
@@ -219,8 +302,10 @@ final class AppCatalog {
                 eventMask: [.write, .rename, .delete],
                 queue: .main
             )
-            source.setEventHandler { [weak self] in
-                self?.refresh()
+            source.setEventHandler {
+                Task { @MainActor in
+                    AppCatalog.shared.scheduleScan(delay: 0.3)
+                }
             }
             source.setCancelHandler {
                 close(fd)

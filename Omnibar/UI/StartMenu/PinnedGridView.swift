@@ -5,6 +5,7 @@ final class PinnedGridView: NSView {
     var onLaunch: ((String) -> Void)?
     private let header = NSTextField(labelWithString: "Pinned Apps")
     private var buttons: [NSButton] = []
+    private var renderedIDs: [String] = []
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -15,19 +16,35 @@ final class PinnedGridView: NSView {
     required init?(coder: NSCoder) { nil }
 
     func update(_ bundleIDs: [String]) {
-        buttons.forEach { $0.removeFromSuperview() }
-        buttons = bundleIDs.map { id in
-            let button = NSButton(title: "", target: self, action: #selector(tap(_:)))
-            button.bezelStyle = .shadowlessSquare
-            button.isBordered = false
-            button.image = IconCache.icon(forBundleID: id)
-            button.imagePosition = .imageOnly
-            button.imageScaling = .scaleProportionallyUpOrDown
-            button.identifier = NSUserInterfaceItemIdentifier(id)
-            button.toolTip = IconCache.appName(for: id)
-            addSubview(button)
-            return button
+        if bundleIDs == renderedIDs, buttons.count == bundleIDs.count { return }
+        renderedIDs = bundleIDs
+
+        var next: [NSButton] = []
+        for (index, id) in bundleIDs.enumerated() {
+            let button: NSButton
+            if index < buttons.count {
+                button = buttons[index]
+            } else {
+                button = NSButton(title: "", target: self, action: #selector(tap(_:)))
+                button.bezelStyle = .shadowlessSquare
+                button.isBordered = false
+                button.imagePosition = .imageOnly
+                button.imageScaling = .scaleProportionallyUpOrDown
+                addSubview(button)
+            }
+            if button.identifier?.rawValue != id {
+                button.identifier = NSUserInterfaceItemIdentifier(id)
+                button.image = IconCache.icon(forBundleID: id)
+                button.toolTip = IconCache.appName(for: id)
+            }
+            next.append(button)
         }
+        if next.count < buttons.count {
+            for extra in buttons[next.count...] {
+                extra.removeFromSuperview()
+            }
+        }
+        buttons = next
         needsLayout = true
     }
 

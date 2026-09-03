@@ -15,6 +15,7 @@ final class ThumbnailPopover: NSPanel {
     private var tracking: NSTrackingArea?
     private var flagsMonitor: Any?
     private var globalFlagsMonitor: Any?
+    private var otherMouseMonitor: Any?
     private(set) var isHovered = false
     private var windows: [WindowInfo] = []
     private var item: TaskItem?
@@ -147,6 +148,7 @@ final class ThumbnailPopover: NSPanel {
         reel.setVisible(false)
         installTracking()
         installFlagsMonitor()
+        installOtherMouseMonitor()
         orderFrontRegardless()
         startRefresh()
     }
@@ -168,6 +170,7 @@ final class ThumbnailPopover: NSPanel {
         isHovered = false
         reel.setVisible(false)
         removeFlagsMonitor()
+        removeOtherMouseMonitor()
         orderOut(nil)
     }
 
@@ -361,6 +364,40 @@ final class ThumbnailPopover: NSPanel {
         if let globalFlagsMonitor {
             NSEvent.removeMonitor(globalFlagsMonitor)
             self.globalFlagsMonitor = nil
+        }
+    }
+
+    private func installOtherMouseMonitor() {
+        removeOtherMouseMonitor()
+        otherMouseMonitor = NSEvent.addLocalMonitorForEvents(matching: .otherMouseDown) { [weak self] event in
+            guard let self, self.isVisible, event.buttonNumber == 2 else { return event }
+            guard let card = self.card(at: event) else { return event }
+            card.handleMiddleClick()
+            return nil
+        }
+    }
+
+    private func removeOtherMouseMonitor() {
+        if let otherMouseMonitor {
+            NSEvent.removeMonitor(otherMouseMonitor)
+            self.otherMouseMonitor = nil
+        }
+    }
+
+    private func card(at event: NSEvent) -> ThumbnailCardView? {
+        let locationInPopover: NSPoint
+        if event.window == self {
+            locationInPopover = event.locationInWindow
+        } else if let window = event.window {
+            let screen = window.convertToScreen(NSRect(origin: event.locationInWindow, size: .zero)).origin
+            guard frame.contains(screen) else { return nil }
+            locationInPopover = convertFromScreen(NSRect(origin: screen, size: .zero)).origin
+        } else {
+            guard frame.contains(NSEvent.mouseLocation) else { return nil }
+            locationInPopover = convertFromScreen(NSRect(origin: NSEvent.mouseLocation, size: .zero)).origin
+        }
+        return cards.first { card in
+            !card.isHidden && card.bounds.contains(card.convert(locationInPopover, from: nil))
         }
     }
 }

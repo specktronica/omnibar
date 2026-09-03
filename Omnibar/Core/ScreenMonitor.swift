@@ -37,27 +37,14 @@ final class ScreenMonitor {
             }
             observers.append(token)
         }
-        globalMouse = NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged]) { [weak self] event in
-            Task { @MainActor in
-                self?.handleMouse(event.locationInWindow, global: true, event: event)
-            }
-        }
-        localMouse = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged]) { [weak self] event in
-            Task { @MainActor in
-                self?.handleMouse(event.locationInWindow, global: false, event: event)
-            }
-            return event
-        }
+        updateMouseMonitors()
     }
 
     func stop() {
         observers.forEach { NotificationCenter.default.removeObserver($0) }
         observers.forEach { NSWorkspace.shared.notificationCenter.removeObserver($0) }
         observers.removeAll()
-        if let globalMouse { NSEvent.removeMonitor(globalMouse) }
-        if let localMouse { NSEvent.removeMonitor(localMouse) }
-        globalMouse = nil
-        localMouse = nil
+        removeMouseMonitors()
         panels.values.forEach { $0.orderOut(nil) }
         panels.removeAll()
     }
@@ -103,14 +90,42 @@ final class ScreenMonitor {
             panel.applySnapshot(snapshot)
             panel.setSuppressed(hidden || fullscreen)
         }
+        updateMouseMonitors()
         updateAutoHide(cursor: NSEvent.mouseLocation)
     }
 
-    private func handleMouse(_ location: NSPoint, global: Bool, event: NSEvent) {
-        let point = global ? NSEvent.mouseLocation : NSEvent.mouseLocation
-        updateAutoHide(cursor: point)
-        _ = location
-        _ = event
+    private func updateMouseMonitors() {
+        if SettingsStore.shared.settings.autoHide {
+            installMouseMonitors()
+        } else {
+            removeMouseMonitors()
+        }
+    }
+
+    private func installMouseMonitors() {
+        guard globalMouse == nil, localMouse == nil else { return }
+        globalMouse = NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged]) { [weak self] _ in
+            let point = NSEvent.mouseLocation
+            Task { @MainActor in
+                self?.updateAutoHide(cursor: point)
+            }
+        }
+        localMouse = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged]) { [weak self] event in
+            let point = NSEvent.mouseLocation
+            Task { @MainActor in
+                self?.updateAutoHide(cursor: point)
+            }
+            return event
+        }
+    }
+
+    private func removeMouseMonitors() {
+        if let globalMouse { NSEvent.removeMonitor(globalMouse) }
+        if let localMouse { NSEvent.removeMonitor(localMouse) }
+        globalMouse = nil
+        localMouse = nil
+        hideWork?.cancel()
+        hideWork = nil
     }
 
     private func updateAutoHide(cursor: NSPoint) {

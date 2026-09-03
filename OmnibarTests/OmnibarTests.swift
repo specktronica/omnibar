@@ -455,6 +455,56 @@ final class TaskItemIconLayoutTests: XCTestCase {
     }
 }
 
+final class ThumbnailPreviewClickTests: XCTestCase {
+    @MainActor
+    func testMiddleClickClosesPreviewWindow() {
+        let window = stubWindow(id: 7, title: "Doc")
+        let item = TaskItem(id: window.orderKey, kind: .window(window))
+        let card = ThumbnailCardView(frame: NSRect(x: 0, y: 0, width: 240, height: 160))
+        card.configure(window: window, item: item, size: 240, showTitle: true)
+        var closed: CGWindowID?
+        card.onClose = { closed = $0.id }
+        card.otherMouseDown(with: otherMouseEvent(at: NSPoint(x: 120, y: 80)))
+        XCTAssertEqual(closed, window.id)
+    }
+
+    @MainActor
+    func testLeftClickDoesNotClosePreviewWindow() {
+        let window = stubWindow(id: 8, title: "Doc")
+        let item = TaskItem(id: window.orderKey, kind: .window(window))
+        let card = ThumbnailCardView(frame: NSRect(x: 0, y: 0, width: 240, height: 160))
+        card.configure(window: window, item: item, size: 240, showTitle: true)
+        var closed = false
+        var raised = false
+        card.onClose = { _ in closed = true }
+        card.onRaise = { _ in raised = true }
+        card.mouseDown(with: leftMouseEvent(at: NSPoint(x: 120, y: 80)))
+        XCTAssertTrue(raised)
+        XCTAssertFalse(closed)
+    }
+
+    @MainActor
+    private func otherMouseEvent(at location: NSPoint) -> NSEvent {
+        mouseEvent(type: .otherMouseDown, button: .center, location: location)
+    }
+
+    @MainActor
+    private func leftMouseEvent(at location: NSPoint) -> NSEvent {
+        mouseEvent(type: .leftMouseDown, button: .left, location: location)
+    }
+
+    @MainActor
+    private func mouseEvent(type: CGEventType, button: CGMouseButton, location: NSPoint) -> NSEvent {
+        let cgEvent = CGEvent(
+            mouseEventSource: nil,
+            mouseType: type,
+            mouseCursorPosition: CGPoint(x: location.x, y: location.y),
+            mouseButton: button
+        )!
+        return NSEvent(cgEvent: cgEvent)!
+    }
+}
+
 final class AppCatalogGroupingTests: XCTestCase {
     @MainActor
     func testLetterGroups() {
@@ -472,6 +522,26 @@ final class AppCatalogGroupingTests: XCTestCase {
     @MainActor
     func testEmptyListHasNoGroups() {
         XCTAssertTrue(AppCatalog.shared.groupedByLetter([]).isEmpty)
+    }
+
+    @MainActor
+    func testLetterClassifiesAsciiInitials() {
+        XCTAssertEqual(AppCatalog.letter(for: "Arcade"), "A")
+        XCTAssertEqual(AppCatalog.letter(for: "1Password"), "#")
+        XCTAssertEqual(AppCatalog.letter(for: ""), "#")
+    }
+
+    @MainActor
+    func testGroupsMatchingEmptyQueryUsesSortedLetters() {
+        let catalog = AppCatalog.shared
+        let apps = [
+            AppCatalog.CatalogApp(bundleID: "c", name: "1Password", url: URL(fileURLWithPath: "/tmp/c.app")),
+            AppCatalog.CatalogApp(bundleID: "a", name: "Arcade", url: URL(fileURLWithPath: "/tmp/a.app"))
+        ]
+        let grouped = catalog.groupedByLetter(apps)
+        XCTAssertEqual(grouped.map(\.letter), ["#", "A"])
+        let filtered = AppCatalog.filter(apps, query: "arc")
+        XCTAssertEqual(filtered.map(\.name), ["Arcade"])
     }
 }
 
@@ -523,6 +593,112 @@ final class AppListViewTests: XCTestCase {
             document?.subviews.compactMap { $0 as? NSTextField }.map(\.stringValue),
             ["A", "B"]
         )
+    }
+
+    @MainActor
+    func testReuseKeepsRowIdentitiesOnUnchangedUpdate() {
+        let view = AppListView(frame: NSRect(x: 0, y: 0, width: 300, height: 200))
+        let apps = [
+            AppCatalog.CatalogApp(bundleID: "a", name: "Arcade", url: URL(fileURLWithPath: "/tmp/Arcade.app")),
+            AppCatalog.CatalogApp(bundleID: "b", name: "Books", url: URL(fileURLWithPath: "/tmp/Books.app"))
+        ]
+        let groups = AppCatalog.shared.groupedByLetter(apps)
+        view.update(groups)
+        view.layoutSubtreeIfNeeded()
+        let before = view.documentView?.subviews.map { ObjectIdentifier($0) }
+        view.update(groups)
+        view.layoutSubtreeIfNeeded()
+        let after = view.documentView?.subviews.map { ObjectIdentifier($0) }
+        XCTAssertEqual(before, after)
+        XCTAssertEqual(view.documentView?.subviews.count, 4)
+    }
+
+    @MainActor
+    func testSearchNarrowsThenRestoresRows() {
+        let view = AppListView(frame: NSRect(x: 0, y: 0, width: 300, height: 200))
+        let apps = [
+            AppCatalog.CatalogApp(bundleID: "a", name: "Arcade", url: URL(fileURLWithPath: "/tmp/Arcade.app")),
+            AppCatalog.CatalogApp(bundleID: "b", name: "Books", url: URL(fileURLWithPath: "/tmp/Books.app"))
+        ]
+        view.update(AppCatalog.shared.groupedByLetter(apps))
+        view.update(AppCatalog.shared.groupedByLetter(AppCatalog.filter(apps, query: "book")))
+        view.layoutSubtreeIfNeeded()
+        XCTAssertEqual(
+            view.documentView?.subviews.compactMap { $0 as? NSTextField }.map(\.stringValue),
+            ["B"]
+        )
+        view.update(AppCatalog.shared.groupedByLetter(apps))
+        view.layoutSubtreeIfNeeded()
+        XCTAssertEqual(
+            view.documentView?.subviews.compactMap { $0 as? NSTextField }.map(\.stringValue),
+            ["A", "B"]
+        )
+        XCTAssertEqual(view.documentView?.subviews.count, 4)
+    }
+}
+
+final class TaskbarSnapshotUITests: XCTestCase {
+    @MainActor
+    func testFrameOnlyChangeIsUIEqual() {
+        let window = stubWindow(id: 1, title: "Docs")
+        var moved = window
+        moved = WindowInfo(
+            id: window.id,
+            pid: window.pid,
+            bundleID: window.bundleID,
+            appName: window.appName,
+            title: window.title,
+            frame: CGRect(x: 40, y: 40, width: 800, height: 600),
+            screenID: window.screenID,
+            spaces: window.spaces,
+            isMinimized: window.isMinimized,
+            isHidden: window.isHidden,
+            isFullscreen: window.isFullscreen,
+            isOnScreen: window.isOnScreen,
+            isTabbed: window.isTabbed,
+            isActive: window.isActive,
+            layer: window.layer
+        )
+        let item = TaskItem(id: window.orderKey, kind: .window(window))
+        let lhs = TaskbarSnapshot(
+            windows: [window],
+            itemsByScreen: [1: [item]],
+            currentSpaces: [1: 10],
+            fullscreenDisplays: [],
+            generatedAt: .now
+        )
+        let rhs = TaskbarSnapshot(
+            windows: [moved],
+            itemsByScreen: [1: [TaskItem(id: moved.orderKey, kind: .window(moved))]],
+            currentSpaces: [1: 10],
+            fullscreenDisplays: [],
+            generatedAt: .now
+        )
+        XCTAssertTrue(window.matchesTaskbar(moved))
+        XCTAssertTrue(lhs.uiEquals(rhs))
+        XCTAssertNotEqual(lhs, rhs)
+    }
+
+    @MainActor
+    func testTitleChangeIsNotUIEqual() {
+        let window = stubWindow(id: 1, title: "Docs")
+        let renamed = stubWindow(id: 1, title: "Other")
+        let lhs = TaskbarSnapshot(
+            windows: [window],
+            itemsByScreen: [1: [TaskItem(id: window.orderKey, kind: .window(window))]],
+            currentSpaces: [1: 10],
+            fullscreenDisplays: [],
+            generatedAt: .now
+        )
+        let rhs = TaskbarSnapshot(
+            windows: [renamed],
+            itemsByScreen: [1: [TaskItem(id: renamed.orderKey, kind: .window(renamed))]],
+            currentSpaces: [1: 10],
+            fullscreenDisplays: [],
+            generatedAt: .now
+        )
+        XCTAssertFalse(window.matchesTaskbar(renamed))
+        XCTAssertFalse(lhs.uiEquals(rhs))
     }
 }
 

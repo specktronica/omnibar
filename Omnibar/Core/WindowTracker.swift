@@ -17,6 +17,7 @@ final class WindowTracker {
     private var lastScan = ScanResult.empty
     private var elementCache: [CGWindowID: AXElementRef] = [:]
     private var lastSettings: AppSettings = .default
+    private var appMetaByPID: [pid_t: ScanRequest.App] = [:]
 
     private let ignoredBundleIDs: Set<String> = [
         "com.apple.dock",
@@ -51,6 +52,7 @@ final class WindowTracker {
         debounceWork = nil
         coalescer = ScanCoalescer()
         observers.removeAll()
+        appMetaByPID.removeAll()
         for token in workspaceObservers {
             NotificationCenter.default.removeObserver(token)
             NSWorkspace.shared.notificationCenter.removeObserver(token)
@@ -229,16 +231,28 @@ final class WindowTracker {
     }
 
     private func makeScanRequest() -> ScanRequest {
-        let apps = NSWorkspace.shared.runningApplications
-            .filter { $0.activationPolicy == .regular }
-            .map { app in
-                ScanRequest.App(
-                    pid: app.processIdentifier,
-                    bundleID: app.bundleIdentifier,
-                    appName: app.localizedName ?? app.bundleIdentifier ?? "App",
+        let running = NSWorkspace.shared.runningApplications.filter { $0.activationPolicy == .regular }
+        let livePIDs = Set(running.map(\.processIdentifier))
+        appMetaByPID = appMetaByPID.filter { livePIDs.contains($0.key) }
+        let apps = running.map { app -> ScanRequest.App in
+            let pid = app.processIdentifier
+            if let cached = appMetaByPID[pid] {
+                return ScanRequest.App(
+                    pid: cached.pid,
+                    bundleID: cached.bundleID,
+                    appName: cached.appName,
                     isHidden: app.isHidden
                 )
             }
+            let meta = ScanRequest.App(
+                pid: pid,
+                bundleID: app.bundleIdentifier,
+                appName: app.localizedName ?? app.bundleIdentifier ?? "App",
+                isHidden: app.isHidden
+            )
+            appMetaByPID[pid] = meta
+            return meta
+        }
         let screens = NSScreen.screens.map {
             ScanRequest.Screen(displayID: $0.displayID, cocoaFrame: $0.frame)
         }
@@ -308,8 +322,9 @@ final class WindowTracker {
     }
 
     private func publish(_ snap: TaskbarSnapshot) {
-        if snap == snapshot { return }
+        let uiChanged = !snap.uiEquals(snapshot)
         snapshot = snap
+        guard uiChanged else { return }
         NotificationCenter.default.post(name: .omnibarSnapshotDidChange, object: snap)
     }
 }

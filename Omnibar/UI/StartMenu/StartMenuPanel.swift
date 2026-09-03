@@ -15,6 +15,10 @@ final class StartMenuPanel: NSPanel {
     private var globalMonitor: Any?
     private var startButtonScreenRect: NSRect = .zero
     private var query = ""
+    private var lastQuery: String?
+    private var lastAppIDs: [String] = []
+    private var lastPinIDs: [String] = []
+    private var lastRecentIDs: [String] = []
 
     init() {
         super.init(
@@ -80,7 +84,6 @@ final class StartMenuPanel: NSPanel {
 
     func present(from startButton: NSRect, screen: NSScreen) {
         startButtonScreenRect = startButton
-        reload()
         let size = NSSize(width: 640, height: min(520, screen.visibleFrame.height - 80))
         var origin = NSPoint(x: startButton.minX, y: startButton.maxY + 8)
         if origin.x + size.width > screen.frame.maxX - 8 {
@@ -116,10 +119,27 @@ final class StartMenuPanel: NSPanel {
     }
 
     private func reload() {
-        let apps = AppCatalog.shared.search(query)
-        appList.update(AppCatalog.shared.groupedByLetter(apps))
-        pinnedGrid.update(PinStore.shared.pinnedBundleIDs)
-        recents.update(AppCatalog.shared.recents)
+        let groups = AppCatalog.shared.groups(matching: query)
+        let appIDs = groups.flatMap { $0.apps.map(\.id) }
+        if query != lastQuery || appIDs != lastAppIDs {
+            lastQuery = query
+            lastAppIDs = appIDs
+            appList.update(groups)
+        }
+
+        let pins = PinStore.shared.pinnedBundleIDs
+        if pins != lastPinIDs {
+            lastPinIDs = pins
+            pinnedGrid.update(pins)
+        }
+
+        let recentApps = AppCatalog.shared.recents
+        let recentIDs = recentApps.map(\.id)
+        if recentIDs != lastRecentIDs {
+            lastRecentIDs = recentIDs
+            recents.update(recentApps)
+        }
+
         layoutContent()
     }
 

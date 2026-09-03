@@ -32,4 +32,17 @@ extension TaskbarSnapshot: Equatable {
             && lhs.fullscreenDisplays == rhs.fullscreenDisplays
             && lhs.itemsByScreen.mapValues { $0.map(\.id) } == rhs.itemsByScreen.mapValues { $0.map(\.id) }
     }
+
+    /// True when tiles, spaces, and badges match. Ignores window frames.
+    func uiEquals(_ other: TaskbarSnapshot) -> Bool {
+        guard currentSpaces == other.currentSpaces,
+              fullscreenDisplays == other.fullscreenDisplays,
+              windows.count == other.windows.count else {
+            return false
+        }
+        for (lhs, rhs) in zip(windows, other.windows) where !lhs.matchesTaskbar(rhs) {
+            return false
+        }
+        return itemsByScreen.mapValues { $0.map(\.uiKey) } == other.itemsByScreen.mapValues { $0.map(\.uiKey) }
+    }
 }

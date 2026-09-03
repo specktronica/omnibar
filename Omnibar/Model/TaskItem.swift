@@ -81,4 +81,18 @@ struct TaskItem: Identifiable {
         if case .pinned = kind { return true }
         return false
     }
+
+    var uiKey: String {
+        switch kind {
+        case .window(let window):
+            return "w:\(id):\(window.title):\(window.isActive):\(window.isMinimized):\(window.isHidden):\(badge ?? "")"
+        case .grouped(let bundleID, let appName, let windows, let badge):
+            let parts = windows.map {
+                "\($0.id):\($0.title):\($0.isActive):\($0.isMinimized):\($0.isHidden)"
+            }.joined(separator: ",")
+            return "g:\(id):\(bundleID ?? ""):\(appName):\(badge ?? ""):\(parts)"
+        case .pinned(let bundleID, let name, _, let badge):
+            return "p:\(id):\(bundleID):\(name):\(badge ?? "")"
+        }
+    }
 }

@@ -104,17 +104,23 @@ actor WindowScanner {
     }
 
     func scan(_ request: ScanRequest) -> ScanResult {
-        let onScreen = CGWindowListCopyWindowInfo(.optionOnScreenOnly, kCGNullWindowID) as? [[String: Any]] ?? []
-        let allCGWindows = CGWindowListCopyWindowInfo([], kCGNullWindowID) as? [[String: Any]] ?? []
+        let allCGWindows = CGWindowListCopyWindowInfo(.optionAll, kCGNullWindowID) as? [[String: Any]] ?? []
 
         var cgByID: [CGWindowID: [String: Any]] = [:]
         cgByID.reserveCapacity(allCGWindows.count)
+        var onScreenIDs = Set<CGWindowID>()
+        var layer0PIDs = Set<pid_t>()
         for info in allCGWindows {
-            if let id = (info[kCGWindowNumber as String] as? NSNumber)?.uint32Value {
-                cgByID[id] = info
+            guard let id = (info[kCGWindowNumber as String] as? NSNumber)?.uint32Value else { continue }
+            cgByID[id] = info
+            if (info[kCGWindowIsOnscreen as String] as? NSNumber)?.boolValue == true {
+                onScreenIDs.insert(id)
+            }
+            let layer = (info[kCGWindowLayer as String] as? NSNumber)?.int32Value ?? 0
+            if layer == 0, let pid = (info[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value {
+                layer0PIDs.insert(pid_t(pid))
             }
         }
-        let onScreenIDs = Set(onScreen.compactMap { ($0[kCGWindowNumber as String] as? NSNumber)?.uint32Value })
         let screenSizes = request.screens.map(\.cocoaFrame.size)
 
         var windows: [WindowInfo] = []
@@ -126,6 +132,7 @@ actor WindowScanner {
                request.ignoredBundleIDs.contains(bundleID) || request.blacklist.contains(bundleID) {
                 continue
             }
+            guard layer0PIDs.contains(app.pid) else { continue }
 
             let axWindows = AXBridge.windows(forApp: app.pid)
             var focusedID: CGWindowID?

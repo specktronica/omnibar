@@ -28,4 +28,22 @@ struct WindowInfo: Equatable, Hashable, Identifiable, Sendable {
         guard let space, !spaces.isEmpty else { return true }
         return spaces.contains(space)
     }
+
+    /// Taskbar identity excluding `frame`, so move/resize does not refresh tiles.
+    func matchesTaskbar(_ other: WindowInfo) -> Bool {
+        id == other.id
+            && pid == other.pid
+            && bundleID == other.bundleID
+            && appName == other.appName
+            && title == other.title
+            && screenID == other.screenID
+            && spaces == other.spaces
+            && isMinimized == other.isMinimized
+            && isHidden == other.isHidden
+            && isFullscreen == other.isFullscreen
+            && isOnScreen == other.isOnScreen
+            && isTabbed == other.isTabbed
+            && isActive == other.isActive
+            && layer == other.layer
+    }
 }

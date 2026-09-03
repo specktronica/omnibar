@@ -19,6 +19,7 @@ final class TaskItemView: NSView {
     private var mouseDownEvent: NSEvent?
     private var dragging = false
     private var settings: AppSettings
+    private var appliedToken = 0
 
     init(item: TaskItem, settings: AppSettings) {
         self.item = item
@@ -45,11 +46,15 @@ final class TaskItemView: NSView {
         addSubview(dotsView)
         addSubview(badgeView)
         refresh()
+        appliedToken = Self.displayToken(item: item, settings: settings)
     }
 
     required init?(coder: NSCoder) { nil }
 
     func apply(item: TaskItem, settings: AppSettings) {
+        let token = Self.displayToken(item: item, settings: settings)
+        if token == appliedToken { return }
+        appliedToken = token
         self.item = item
         self.settings = settings
         refresh()
@@ -167,6 +172,18 @@ final class TaskItemView: NSView {
 
     static func badgeLength(iconLength: CGFloat) -> CGFloat {
         max(14, (iconLength * 14 / 26).rounded())
+    }
+
+    static func displayToken(item: TaskItem, settings: AppSettings) -> Int {
+        var hasher = Hasher()
+        hasher.combine(item.uiKey)
+        hasher.combine(settings.compactItems)
+        hasher.combine(settings.fontSize)
+        hasher.combine(settings.indicateMinimizedHidden)
+        hasher.combine(settings.iconOnly)
+        hasher.combine(settings.groupByApplication)
+        hasher.combine(item.bundleID)
+        return hasher.finalize()
     }
 
     override func draw(_ dirtyRect: NSRect) {

@@ -98,6 +98,20 @@ final class ThumbnailCardView: NSView {
         _ = event
     }
 
+    override func otherMouseDown(with event: NSEvent) {
+        guard event.buttonNumber == 2 else {
+            super.otherMouseDown(with: event)
+            return
+        }
+        handleMiddleClick()
+    }
+
+    func handleMiddleClick() {
+        if let windowInfo {
+            onClose?(windowInfo)
+        }
+    }
+
     func configure(window: WindowInfo, item: TaskItem, size _: CGFloat, showTitle: Bool) {
         windowInfo = window
         titleField.isHidden = !showTitle
@@ -259,6 +273,10 @@ final class TrafficLightsView: NSView {
     override func mouseDown(with event: NSEvent) {
         pressed = kind(at: convert(event.locationInWindow, from: nil))
         needsDisplay = true
+    }
+
+    override func otherMouseDown(with event: NSEvent) {
+        nextResponder?.otherMouseDown(with: event)
     }
 
     override func mouseUp(with event: NSEvent) {
