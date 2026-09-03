@@ -14,7 +14,8 @@ final class TaskbarView: NSView {
     var isDragging: Bool { draggingView != nil }
 
     private let startButton = StartButtonView()
-    private let startDivider = StartDivider()
+    private let startDivider = BarDivider()
+    private let appsDivider = BarDivider()
     private var itemViews: [TaskItemView] = []
     private var items: [TaskItem] = []
     private var settings: AppSettings = .default
@@ -27,6 +28,8 @@ final class TaskbarView: NSView {
         startButton.onRightClick = { [weak self] event in self?.onStartRightClick?(event) }
         addSubview(startButton)
         addSubview(startDivider)
+        appsDivider.isHidden = true
+        addSubview(appsDivider)
     }
 
     required init?(coder: NSCoder) { nil }
@@ -85,6 +88,7 @@ final class TaskbarView: NSView {
         for (index, item) in items.enumerated() {
             itemViews[index].apply(item: item, settings: settings)
         }
+        addSubview(appsDivider, positioned: .above, relativeTo: nil)
     }
 
     private func wire(_ view: TaskItemView) {
@@ -97,9 +101,11 @@ final class TaskbarView: NSView {
         view.onDragEnded = { [weak self] itemView, event in self?.endDrag(itemView, event: event) }
     }
 
-    private func slotMetrics() -> (originX: CGFloat, tileWidth: CGFloat) {
+    private func slotMetrics() -> (originX: CGFloat, tileWidth: CGFloat, pinSplit: Int?) {
         let originX = startDivider.frame.maxX + 4
-        let available = max(0, bounds.width - originX - 8)
+        let pinSplit = pinSplitIndex()
+        let sectionGap: CGFloat = pinSplit == nil ? 0 : 9
+        let available = max(0, bounds.width - originX - 8 - sectionGap)
         let count = max(1, itemViews.count)
         let maxTile: CGFloat = settings.compactItems ? bounds.height + 16 : 220
         let minTile: CGFloat = settings.compactItems ? bounds.height + 8 : 72
@@ -107,11 +113,28 @@ final class TaskbarView: NSView {
         if CGFloat(itemViews.count) * tileWidth > available, itemViews.count > 0 {
             tileWidth = max(bounds.height, available / CGFloat(itemViews.count))
         }
-        return (originX, floor(tileWidth))
+        return (originX, floor(tileWidth), pinSplit)
+    }
+
+    private func pinSplitIndex() -> Int? {
+        let split = items.firstIndex { !Self.isPinnedSection($0) } ?? items.count
+        guard split > 0, split < items.count else { return nil }
+        return split
+    }
+
+    private static func isPinnedSection(_ item: TaskItem) -> Bool {
+        if item.isPinnedLauncher { return true }
+        if let id = item.bundleID { return PinStore.shared.isPinned(id) }
+        return false
+    }
+
+    private func itemOriginX(index: Int, originX: CGFloat, tileWidth: CGFloat, pinSplit: Int?) -> CGFloat {
+        let extra: CGFloat = (pinSplit.map { index >= $0 } ?? false) ? 9 : 0
+        return originX + CGFloat(index) * tileWidth + extra
     }
 
     private func layoutItems(animateSiblings: Bool = false) {
-        let (originX, tileWidth) = slotMetrics()
+        let (originX, tileWidth, pinSplit) = slotMetrics()
         let chrome: CGFloat = 2
         let height = bounds.height - chrome
         let originY = chrome / 2
@@ -125,12 +148,21 @@ final class TaskbarView: NSView {
         let frames: [(TaskItemView, CGRect)] = itemViews.enumerated().compactMap { index, view in
             guard view !== draggingView else { return nil }
             let frame = CGRect(
-                x: originX + CGFloat(index) * tileWidth,
+                x: itemOriginX(index: index, originX: originX, tileWidth: tileWidth, pinSplit: pinSplit),
                 y: originY,
                 width: tileWidth,
                 height: height
             )
             return (view, frame)
+        }
+        let dividerInset: CGFloat = 8
+        let dividerFrame: CGRect? = pinSplit.map { split in
+            CGRect(
+                x: originX + CGFloat(split) * tileWidth + 4,
+                y: dividerInset,
+                width: 1,
+                height: max(0, bounds.height - dividerInset * 2)
+            )
         }
         if animateSiblings {
             NSAnimationContext.runAnimationGroup { ctx in
@@ -140,11 +172,22 @@ final class TaskbarView: NSView {
                 for (view, frame) in frames {
                     view.animator().frame = frame
                 }
+                if let dividerFrame {
+                    appsDivider.isHidden = false
+                    appsDivider.animator().frame = dividerFrame
+                }
             }
         } else {
             for (view, frame) in frames {
                 view.frame = frame
             }
+            if let dividerFrame {
+                appsDivider.isHidden = false
+                appsDivider.frame = dividerFrame
+            }
+        }
+        if dividerFrame == nil {
+            appsDivider.isHidden = true
         }
     }
 
@@ -159,7 +202,7 @@ final class TaskbarView: NSView {
     private func drag(_ view: TaskItemView, event: NSEvent) {
         guard draggingView === view else { return }
         let local = convert(event.locationInWindow, from: nil)
-        let (originX, tileWidth) = slotMetrics()
+        let (originX, tileWidth, pinSplit) = slotMetrics()
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         view.frame = CGRect(
@@ -170,8 +213,15 @@ final class TaskbarView: NSView {
         )
         CATransaction.commit()
         guard let from = itemViews.firstIndex(where: { $0 === view }) else { return }
+        var midX = view.frame.midX
+        if let pinSplit {
+            let splitX = originX + CGFloat(pinSplit) * tileWidth
+            if midX >= splitX + 4 {
+                midX -= 9
+            }
+        }
         let target = DragReorderController.targetIndex(
-            dragMidX: view.frame.midX,
+            dragMidX: midX,
             current: from,
             count: itemViews.count,
             originX: originX,
@@ -195,7 +245,7 @@ final class TaskbarView: NSView {
     }
 }
 
-private final class StartDivider: NSView {
+private final class BarDivider: NSView {
     override var isOpaque: Bool { false }
 
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
