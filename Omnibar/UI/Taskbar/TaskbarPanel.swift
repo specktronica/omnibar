@@ -32,10 +32,7 @@ final class TaskbarPanel: NSPanel {
         taskbarView.onStartRightClick = { [weak self] event in self?.showStartActionMenu(event) }
         startMenu.onPresented = { [weak self] in self?.taskbarView.spinStartButton(opening: true) }
         startMenu.onDismissed = { [weak self] in self?.taskbarView.spinStartButton(opening: false) }
-        taskbarView.onItemClick = { [weak self] item in
-            self?.thumbnail.dismiss(restore: false)
-            WindowActions.handlePrimaryClick(item)
-        }
+        taskbarView.onItemClick = { item in WindowActions.handlePrimaryClick(item) }
         taskbarView.onItemMiddleClick = { [weak self] item in
             self?.openNewWindow(for: item)
         }
@@ -282,14 +279,30 @@ final class TaskbarPanel: NSPanel {
     }
 
     private func commitReorder(_ items: [TaskItem]) {
-        let result = DragReorderController.commitTaskbar(
-            items: items,
-            existingPins: PinStore.shared.pinnedBundleIDs
-        )
-        if let pins = result.pins {
-            PinStore.shared.replace(pins)
+        var pinIDs: [String] = []
+        var windowKeys: [String] = []
+        for item in items {
+            switch item.kind {
+            case .pinned(let id, _, _, _):
+                pinIDs.append(id)
+            case .window(let window):
+                if let bundle = window.bundleID, PinStore.shared.isPinned(bundle) {
+                    if !pinIDs.contains(bundle) { pinIDs.append(bundle) }
+                }
+                windowKeys.append(window.orderKey)
+            case .grouped(let bundleID, _, let windows, _):
+                if let bundleID, PinStore.shared.isPinned(bundleID), !pinIDs.contains(bundleID) {
+                    pinIDs.append(bundleID)
+                }
+                windowKeys.append(contentsOf: windows.map(\.orderKey))
+            }
         }
-        OrderStore.shared.replace(result.windowKeys)
+        if !pinIDs.isEmpty {
+            let existing = PinStore.shared.pinnedBundleIDs
+            let remaining = existing.filter { !pinIDs.contains($0) }
+            PinStore.shared.replace(pinIDs + remaining)
+        }
+        OrderStore.shared.replace(windowKeys)
         WindowTracker.shared.rebuildFromLastScan()
     }
 }

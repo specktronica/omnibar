@@ -1,31 +1,8 @@
 import AppKit
 import Foundation
 
-enum ThumbnailPaging {
-    static let maxVisibleCards = 3
-
-    static func visibleCount(windowCount: Int) -> Int {
-        min(maxVisibleCards, windowCount)
-    }
-
-    static func initialOffset(activeIndex: Int, windowCount: Int) -> Int {
-        let visible = visibleCount(windowCount: windowCount)
-        let maxOffset = max(0, windowCount - visible)
-        if activeIndex >= visible {
-            return min(activeIndex - visible + 1, maxOffset)
-        }
-        return 0
-    }
-
-    static func page(offset: Int, delta: Int, windowCount: Int) -> Int {
-        let visible = visibleCount(windowCount: windowCount)
-        let maxOffset = max(0, windowCount - visible)
-        return min(max(0, offset + delta), maxOffset)
-    }
-}
-
 final class ThumbnailPopover: NSPanel {
-    private static let maxVisibleCards = ThumbnailPaging.maxVisibleCards
+    private static let maxVisibleCards = 3
     private static let cardGap: CGFloat = 8
     private static let verticalInset: CGFloat = 4
     private static let compactHorizontalInset: CGFloat = 4
@@ -140,7 +117,12 @@ final class ThumbnailPopover: NSPanel {
         windows = item.windows
         let visible = visibleCount
         let activeIndex = windows.firstIndex(where: \.isActive) ?? 0
-        offset = ThumbnailPaging.initialOffset(activeIndex: activeIndex, windowCount: windows.count)
+        let maxOffset = max(0, windows.count - visible)
+        if activeIndex >= visible {
+            offset = min(activeIndex - visible + 1, maxOffset)
+        } else {
+            offset = 0
+        }
 
         let settings = SettingsStore.shared.settings
         thumbnailSize = CGFloat(settings.thumbnailSize)
@@ -171,16 +153,12 @@ final class ThumbnailPopover: NSPanel {
         startRefresh()
     }
 
-    func dismiss(restore: Bool = true) {
+    func dismiss() {
         hoverFocusWork?.cancel()
         hoverFocusWork = nil
         restoreWork?.cancel()
         restoreWork = nil
-        if restore {
-            restorePreviousFocusIfNeeded()
-        } else {
-            commitHoverFocus()
-        }
+        restorePreviousFocusIfNeeded()
         hoverFocusedWindowID = nil
         restoreWindow = nil
         restoreFrontPID = nil
@@ -227,7 +205,7 @@ final class ThumbnailPopover: NSPanel {
         hoverFocusWork?.cancel()
         let work = DispatchWorkItem { [weak self] in
             guard let self, self.isVisible, !self.hoverFocusCommitted else { return }
-            WindowActions.raise(window, activateApp: false)
+            WindowActions.raise(window)
             self.didTemporarilyRaise = true
             self.hoverFocusedWindowID = window.id
             self.orderFrontRegardless()
@@ -262,9 +240,9 @@ final class ThumbnailPopover: NSPanel {
         restorePeekedStacking()
         if let window = restoreWindow {
             WindowActions.raise(window)
-        } else if let pid = restoreFrontPID,
-                  let app = NSRunningApplication(processIdentifier: pid) {
-            WindowActions.activate(app)
+        } else if let pid = restoreFrontPID {
+            NSRunningApplication(processIdentifier: pid)?.unhide()
+            NSRunningApplication(processIdentifier: pid)?.activate(options: [.activateIgnoringOtherApps])
         }
         if isVisible {
             orderFrontRegardless()
@@ -288,7 +266,8 @@ final class ThumbnailPopover: NSPanel {
     }
 
     private func page(by delta: Int) {
-        let next = ThumbnailPaging.page(offset: offset, delta: delta, windowCount: windows.count)
+        let maxOffset = max(0, windows.count - visibleCount)
+        let next = min(max(0, offset + delta), maxOffset)
         guard next != offset else { return }
         hoverFocusWork?.cancel()
         hoverFocusWork = nil

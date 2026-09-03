@@ -2,26 +2,15 @@ import AppKit
 import Foundation
 
 enum WindowActions {
-    enum PrimaryClickAction: Equatable {
-        case launch(bundleID: String)
-        case raise(WindowInfo)
-        case minimize(WindowInfo)
-        case hide(pid: pid_t)
-    }
-
-    static func raise(_ window: WindowInfo, activateApp: Bool = true) {
-        if activateApp {
-            activate(pid: window.pid)
-        }
+    static func raise(_ window: WindowInfo) {
+        activate(pid: window.pid)
         if let element = element(for: window) {
             if window.isMinimized {
                 AXBridge.setMinimized(element, false)
             }
             AXBridge.raise(element)
         }
-        if activateApp {
-            activate(pid: window.pid)
-        }
+        NSRunningApplication(processIdentifier: window.pid)?.activate(options: [.activateIgnoringOtherApps])
     }
 
     static func restack(frontToBack: [(id: CGWindowID, pid: pid_t)]) {
@@ -86,70 +75,31 @@ enum WindowActions {
     }
 
     static func handlePrimaryClick(_ item: TaskItem) {
-        let pids = Set(item.windows.map(\.pid))
-        let zOrder = CGSBridge.shared.onScreenFrontToBackIDs(ownerPIDs: pids).map(\.id)
-        let frontmostPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
-        switch primaryClickAction(
-            for: item,
-            hideOnClickInsteadOfMinimize: SettingsStore.shared.settings.hideOnClickInsteadOfMinimize,
-            frontmostPID: frontmostPID,
-            frontToBackIDs: zOrder
-        ) {
-        case .launch(let bundleID):
-            launch(bundleID: bundleID)
-        case .raise(let window):
-            raise(window)
-        case .minimize(let window):
-            minimize(window)
-        case .hide(let pid):
-            hideApp(pid: pid)
-        case .none:
-            break
-        }
-    }
-
-    /// Snapshot `isActive` lags behind the live frontmost app (Omnibar itself
-    /// becomes frontmost after the Start Menu, and scans run on a timer). Left
-    /// click focuses unless this exact window/app is frontmost right now.
-    static func primaryClickAction(
-        for item: TaskItem,
-        hideOnClickInsteadOfMinimize: Bool,
-        frontmostPID: pid_t?,
-        frontToBackIDs: [CGWindowID]
-    ) -> PrimaryClickAction? {
+        let settings = SettingsStore.shared.settings
         switch item.kind {
         case .pinned(let bundleID, _, _, _):
-            return .launch(bundleID: bundleID)
+            launch(bundleID: bundleID)
         case .window(let window):
-            if shouldCollapse(window, frontmostPID: frontmostPID) {
-                return collapseAction(window, hide: hideOnClickInsteadOfMinimize)
+            if window.isActive {
+                if settings.hideOnClickInsteadOfMinimize {
+                    hideApp(pid: window.pid)
+                } else {
+                    minimize(window)
+                }
+            } else {
+                raise(window)
             }
-            return .raise(window)
         case .grouped(_, _, let windows, _):
-            guard let target = preferredWindow(from: windows, frontToBackIDs: frontToBackIDs) else {
-                return nil
-            }
-            let hasVisible = windows.contains { !$0.isMinimized && !$0.isHidden }
-            if frontmostPID == target.pid, hasVisible {
-                let focused = windows.first(where: \.isActive) ?? target
-                return collapseAction(focused, hide: hideOnClickInsteadOfMinimize)
-            }
-            return .raise(target)
-        }
-    }
-
-    static func preferredWindow(from windows: [WindowInfo], frontToBackIDs: [CGWindowID]) -> WindowInfo? {
-        let visible = windows.filter { !$0.isMinimized && !$0.isHidden }
-        let pool = visible.isEmpty ? windows : visible
-        guard !pool.isEmpty else { return nil }
-        if !frontToBackIDs.isEmpty {
-            let ids = Set(pool.map(\.id))
-            if let id = frontToBackIDs.first(where: { ids.contains($0) }),
-               let match = pool.first(where: { $0.id == id }) {
-                return match
+            if let active = windows.first(where: \.isActive) {
+                if settings.hideOnClickInsteadOfMinimize {
+                    hideApp(pid: active.pid)
+                } else {
+                    minimize(active)
+                }
+            } else if let first = windows.first(where: { !$0.isMinimized && !$0.isHidden }) ?? windows.first {
+                raise(first)
             }
         }
-        return pool.first
     }
 
     static func handleMiddleClick(_ item: TaskItem) {
@@ -161,30 +111,9 @@ enum WindowActions {
             ?? AXBridge.element(forWindowID: window.id, pid: window.pid)
     }
 
-    private static func shouldCollapse(_ window: WindowInfo, frontmostPID: pid_t?) -> Bool {
-        frontmostPID == window.pid && window.isActive && !window.isMinimized && !window.isHidden
-    }
-
-    private static func collapseAction(_ window: WindowInfo, hide: Bool) -> PrimaryClickAction {
-        hide ? .hide(pid: window.pid) : .minimize(window)
-    }
-
     private static func activate(pid: pid_t) {
-        guard let app = NSRunningApplication(processIdentifier: pid), !app.isTerminated else { return }
-        activate(app)
-    }
-
-    /// Accessory, nonactivating panels cannot use cooperative `activate()`.
-    /// Yield to the target and activate from the live front app so key focus
-    /// actually moves on macOS 14+.
-    static func activate(_ app: NSRunningApplication) {
-        app.unhide()
-        NSApp.yieldActivation(to: app)
-        if let front = NSWorkspace.shared.frontmostApplication,
-           front.processIdentifier != app.processIdentifier {
-            if app.activate(from: front) { return }
-        }
-        _ = app.activate()
+        NSRunningApplication(processIdentifier: pid)?.unhide()
+        NSRunningApplication(processIdentifier: pid)?.activate(options: [.activateIgnoringOtherApps])
     }
 
     private static func postCommandN() {
