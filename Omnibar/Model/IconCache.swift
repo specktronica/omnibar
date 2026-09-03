@@ -38,10 +38,9 @@ enum IconCache {
 }
 
 enum BrandIcon {
+    /// In-app mark. Avoid `applicationIconName`: macOS plates that image onto a rounded square.
     static func image(pointSize: CGFloat) -> NSImage? {
-        guard let base = NSImage(named: NSImage.applicationIconName) ?? NSApp.applicationIconImage else {
-            return nil
-        }
+        guard let base = NSImage(named: "BrandLogo") else { return nil }
         guard let image = base.copy() as? NSImage else { return base }
         image.size = NSSize(width: pointSize, height: pointSize)
         image.isTemplate = false

@@ -10,11 +10,12 @@ final class StartButtonView: NSView {
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         wantsLayer = true
+        layer?.backgroundColor = NSColor.clear.cgColor
         iconView.image = BrandIcon.image(pointSize: 32)
         iconView.imageScaling = .scaleProportionallyUpOrDown
+        iconView.imageFrameStyle = .none
         iconView.wantsLayer = true
-        iconView.layer?.cornerCurve = .continuous
-        iconView.layer?.masksToBounds = true
+        iconView.layer?.backgroundColor = NSColor.clear.cgColor
         addSubview(iconView)
     }
 
@@ -34,7 +35,6 @@ final class StartButtonView: NSView {
             width: side,
             height: side
         )
-        iconView.layer?.cornerRadius = max(4, side * 0.22)
     }
 
     override func updateTrackingAreas() {
