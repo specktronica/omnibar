@@ -85,6 +85,22 @@ Signing, TCC, and tests are covered in [docs/development.md](docs/development.md
 
 See [docs/usage.md](docs/usage.md) for clicks, menus, and every Settings pane.
 
+## Support
+
+Tips are optional and do not unlock features. [Ko-fi](https://ko-fi.com/specktronica), or Settings → About in the app.
+
+Bitcoin:
+
+```
+bc1qzd7yvqyyxnz0yd5rrkr3sfathr4ne4zff2a0w8
+```
+
+Ethereum (mainnet):
+
+```
+0xA949241b60e2E7fC0b82b9cd7fB74b2aF78592F7
+```
+
 ## Known limitations
 
 - Space membership and fullscreen detection use private SkyLight / CGS symbols (`CGSCopyManagedDisplaySpaces`, `CGSCopySpacesForWindows`, and related). Those can change with macOS releases.

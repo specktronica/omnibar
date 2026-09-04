@@ -6,7 +6,7 @@ Omnibar is a bottom-of-screen taskbar. It lists windows on the current Space, op
 
 If Accessibility is not granted, an onboarding window appears. Continue is disabled until Accessibility is on. The taskbar appears only after you click Continue (or close the window). Screen Recording and “Hide the macOS Dock” are optional on that screen. Granting Screen Recording during that first launch does not take effect until Omnibar restarts: the row marks as granted, Continue becomes Restart, and Enable Screen Recording stays available until the new process starts.
 
-After that, Omnibar lives in the menu bar. The extra’s menu is **Settings…** (⌘,) and **Quit Omnibar** (⌘Q). Clicking the app again while it is already running opens Settings, as long as Accessibility is granted.
+After that, Omnibar lives in the menu bar. The extra’s menu is **Settings…** (⌘,), **Tip Omnibar…**, and **Quit Omnibar** (⌘Q). **Tip Omnibar…** opens the Ko-fi page in a browser. Clicking the app again while it is already running opens Settings, as long as Accessibility is granted.
 
 ## Taskbar
 
@@ -64,6 +64,7 @@ Open from the menu extra, the taskbar **Taskbar → Settings…** item, or by re
 | Start Menu | Start button action, recent-apps count |
 | Apps | Pinned bundle IDs and blacklist |
 | Advanced | Window-list poll interval, overlap-resize skip list, reset to defaults |
+| About | Version, Tip on Ko-fi, copy Bitcoin and Ethereum addresses |
 
 Reset to defaults restores `AppSettings.default` except **Launch at login**, which is left as-is. It also reverts Dock changes Omnibar made and clears in-session tile order.
 

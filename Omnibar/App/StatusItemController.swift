@@ -22,6 +22,9 @@ final class StatusItemController {
         let settings = NSMenuItem(title: "Settings…", action: #selector(Target.settings), keyEquivalent: ",")
         settings.target = Target.shared
         menu.addItem(settings)
+        let tip = NSMenuItem(title: "Tip Omnibar…", action: #selector(Target.tip), keyEquivalent: "")
+        tip.target = Target.shared
+        menu.addItem(tip)
         menu.addItem(.separator())
         let quit = NSMenuItem(title: "Quit Omnibar", action: #selector(Target.quit), keyEquivalent: "q")
         quit.target = Target.shared
@@ -34,6 +37,10 @@ final class StatusItemController {
 
         @objc func settings() {
             SettingsWindow.show()
+        }
+
+        @objc func tip() {
+            SupportLinks.openKoFi()
         }
 
         @objc func quit() {

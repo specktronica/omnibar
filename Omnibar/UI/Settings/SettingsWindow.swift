@@ -38,6 +38,7 @@ struct SettingsRootView: View {
             StartMenuPane(settings: $store.settings).tabItem { Label("Start Menu", systemImage: "square.grid.2x2") }
             AppsPane().tabItem { Label("Apps", systemImage: "app.badge") }
             AdvancedPane(settings: $store.settings).tabItem { Label("Advanced", systemImage: "slider.horizontal.3") }
+            AboutPane().tabItem { Label("About", systemImage: "info.circle") }
         }
         .padding(16)
         .frame(minWidth: 600, minHeight: 520)
@@ -397,5 +398,55 @@ private struct AdvancedPane: View {
             }
         }
         .formStyle(.grouped)
+    }
+}
+
+private struct AboutPane: View {
+    @State private var copiedAddress: String?
+
+    var body: some View {
+        Form {
+            Section {
+                LabeledContent("Omnibar") {
+                    Text(versionText)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Section {
+                Button("Tip on Ko-fi") {
+                    SupportLinks.openKoFi()
+                }
+                Text("Tips are optional and do not unlock features.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Section("Crypto") {
+                addressRow(title: "Bitcoin", address: SupportLinks.bitcoin)
+                addressRow(title: "Ethereum", address: SupportLinks.ethereum)
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    private var versionText: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
+    }
+
+    private func addressRow(title: String, address: String) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                Text(address)
+                    .font(.system(.caption, design: .monospaced))
+                    .textSelection(.enabled)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+            Spacer()
+            Button(copiedAddress == address ? "Copied" : "Copy") {
+                SupportLinks.copy(address)
+                copiedAddress = address
+            }
+        }
     }
 }
