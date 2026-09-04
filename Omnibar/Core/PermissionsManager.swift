@@ -7,8 +7,10 @@ import Observation
 /// Screen Recording TCC vs what ScreenCaptureKit can actually do in this process.
 ///
 /// `CGPreflightScreenCaptureAccess()` stays false until relaunch after a new
-/// grant. Other processes' `kCGWindowName` values appear as soon as the toggle
-/// is on, so that is the in-session signal that TCC listed us (`tccListed`).
+/// grant. Other processes' normal-level `kCGWindowName` values appear as soon
+/// as the toggle is on, so that is the in-session signal that TCC listed us
+/// (`tccListed`). Menu bar, wallpaper, Dock, and Control Center windows expose
+/// titles without Screen Recording and must not count.
 enum ScreenRecordingAccess: Equatable {
     case denied
     case pendingRestart
@@ -25,9 +27,12 @@ enum ScreenRecordingAccess: Equatable {
     }
 
     static func titlesIndicateTCCGrant(windows: [[String: Any]], selfPID: pid_t) -> Bool {
+        let normalLevel = Int(CGWindowLevelForKey(.normalWindow))
         for window in windows {
             let pid = (window[kCGWindowOwnerPID as String] as? NSNumber)?.intValue ?? 0
             if pid == 0 || pid == Int(selfPID) { continue }
+            let layer = (window[kCGWindowLayer as String] as? NSNumber)?.intValue ?? 0
+            guard layer == normalLevel else { continue }
             let name = window[kCGWindowName as String] as? String
             if let name, !name.isEmpty { return true }
         }

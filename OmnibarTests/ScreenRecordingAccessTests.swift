@@ -42,16 +42,65 @@ final class ScreenRecordingAccessTests: XCTestCase {
     func testTitlesIndicateTCCGrantIgnoresOwnProcessAndEmptyNames() {
         let selfPID: pid_t = 42
         let windows: [[String: Any]] = [
-            [kCGWindowOwnerPID as String: NSNumber(value: selfPID), kCGWindowName as String: "Omnibar"],
-            [kCGWindowOwnerPID as String: NSNumber(value: 99), kCGWindowName as String: ""],
+            [
+                kCGWindowOwnerPID as String: NSNumber(value: selfPID),
+                kCGWindowLayer as String: NSNumber(value: 0),
+                kCGWindowName as String: "Omnibar",
+            ],
+            [
+                kCGWindowOwnerPID as String: NSNumber(value: 99),
+                kCGWindowLayer as String: NSNumber(value: 0),
+                kCGWindowName as String: "",
+            ],
         ]
         XCTAssertFalse(ScreenRecordingAccess.titlesIndicateTCCGrant(windows: windows, selfPID: selfPID))
     }
 
-    func testTitlesIndicateTCCGrantWhenAnotherProcessHasATitle() {
+    func testTitlesIndicateTCCGrantIgnoresSystemWindowsThatLeakTitlesWithoutPermission() {
         let selfPID: pid_t = 42
         let windows: [[String: Any]] = [
-            [kCGWindowOwnerPID as String: NSNumber(value: 99), kCGWindowName as String: "Safari"],
+            [
+                kCGWindowOwnerPID as String: NSNumber(value: 1),
+                kCGWindowLayer as String: NSNumber(value: 24),
+                kCGWindowName as String: "Menubar",
+            ],
+            [
+                kCGWindowOwnerPID as String: NSNumber(value: 2),
+                kCGWindowLayer as String: NSNumber(value: -2147483624),
+                kCGWindowName as String: "Wallpaper-EC12A353-7677-45AC-841C-92E9F356958E",
+            ],
+            [
+                kCGWindowOwnerPID as String: NSNumber(value: 2),
+                kCGWindowLayer as String: NSNumber(value: 20),
+                kCGWindowName as String: "Dock",
+            ],
+            [
+                kCGWindowOwnerPID as String: NSNumber(value: 3),
+                kCGWindowLayer as String: NSNumber(value: 25),
+                kCGWindowName as String: "Item-0",
+            ],
+            [
+                kCGWindowOwnerPID as String: NSNumber(value: 1),
+                kCGWindowLayer as String: NSNumber(value: -2147483626),
+                kCGWindowName as String: "Display 1 Backstop",
+            ],
+        ]
+        XCTAssertFalse(ScreenRecordingAccess.titlesIndicateTCCGrant(windows: windows, selfPID: selfPID))
+    }
+
+    func testTitlesIndicateTCCGrantWhenAnotherProcessHasANormalWindowTitle() {
+        let selfPID: pid_t = 42
+        let windows: [[String: Any]] = [
+            [
+                kCGWindowOwnerPID as String: NSNumber(value: 1),
+                kCGWindowLayer as String: NSNumber(value: 24),
+                kCGWindowName as String: "Menubar",
+            ],
+            [
+                kCGWindowOwnerPID as String: NSNumber(value: 99),
+                kCGWindowLayer as String: NSNumber(value: 0),
+                kCGWindowName as String: "Safari",
+            ],
         ]
         XCTAssertTrue(ScreenRecordingAccess.titlesIndicateTCCGrant(windows: windows, selfPID: selfPID))
     }

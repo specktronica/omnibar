@@ -25,7 +25,7 @@ scripts/        bootstrap (XcodeGen), build, release zip, Homebrew publish
 2. Create the menu extra (`StatusItemController`).
 3. Start `AppCatalog` (application directories + recents).
 4. Apply Dock hiding from settings (`DockManager`).
-5. If Accessibility is trusted, start `WindowTracker` and `ScreenMonitor`. Otherwise show onboarding. The taskbar does not start while onboarding is showing; Continue (or closing the window) posts `.omnibarPermissionsDidChange` after `isShowing` is cleared. Screen Recording is effective for capture only when `CGPreflightScreenCaptureAccess()` was already true at process start. A mid-session grant is pending restart: preflight stays false until relaunch, so onboarding detects the TCC toggle via other processes’ window titles (`kCGWindowName`).
+5. If Accessibility is trusted, start `WindowTracker` and `ScreenMonitor`. Otherwise show onboarding. The taskbar does not start while onboarding is showing; Continue (or closing the window) posts `.omnibarPermissionsDidChange` after `isShowing` is cleared. Screen Recording is effective for capture only when `CGPreflightScreenCaptureAccess()` was already true at process start. A mid-session grant is pending restart: preflight stays false until relaunch, so onboarding detects the TCC toggle via other processes’ normal-level window titles (`kCGWindowName`). Menu bar, wallpaper, Dock, and Control Center titles are ignored because they appear without Screen Recording.
 
 On quit, Dock prefs are restored, then tracker, screen monitor, and catalog stop.
 
