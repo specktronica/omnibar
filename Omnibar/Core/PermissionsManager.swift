@@ -26,6 +26,28 @@ enum ScreenRecordingAccess: Equatable {
         return .denied
     }
 
+    /// First read in a new process. `tccListed` is always false until `refresh()`.
+    static func accessAtLaunch(preflight: Bool) -> ScreenRecordingAccess {
+        resolve(trustedAtLaunch: preflight, preflight: preflight, tccListed: false)
+    }
+
+    /// Sticky in-session TCC listing. Titles can disappear; a revoke is preflight
+    /// dropping after a launch-time grant.
+    static func observedGrant(
+        trustedAtLaunch: Bool,
+        preflight: Bool,
+        tccListed: Bool,
+        previouslyObserved: Bool
+    ) -> Bool {
+        if trustedAtLaunch && !preflight {
+            return false
+        }
+        if preflight || tccListed {
+            return true
+        }
+        return previouslyObserved
+    }
+
     static func titlesIndicateTCCGrant(windows: [[String: Any]], selfPID: pid_t) -> Bool {
         let normalLevel = Int(CGWindowLevelForKey(.normalWindow))
         for window in windows {
@@ -48,6 +70,14 @@ final class PermissionsManager {
     /// True only when Screen Recording was already granted at process start.
     private(set) var screenRecordingTrusted: Bool
     private(set) var screenRecordingNeedsRestart: Bool
+    /// Another copy of Omnibar.app whose designated requirement differs from this process.
+    private(set) var conflictingCopyURL: URL?
+
+    var screenRecordingAccess: ScreenRecordingAccess {
+        if screenRecordingTrusted { return .trusted }
+        if screenRecordingNeedsRestart { return .pendingRestart }
+        return .denied
+    }
 
     private let screenRecordingTrustedAtLaunch: Bool
     private var observedScreenRecordingGrant = false
@@ -57,19 +87,17 @@ final class PermissionsManager {
         accessibilityTrusted = AXIsProcessTrusted()
         let preflight = CGPreflightScreenCaptureAccess()
         screenRecordingTrustedAtLaunch = preflight
-        let access = ScreenRecordingAccess.resolve(
-            trustedAtLaunch: preflight,
-            preflight: preflight,
-            tccListed: false
-        )
+        let access = ScreenRecordingAccess.accessAtLaunch(preflight: preflight)
         screenRecordingTrusted = access == .trusted
         screenRecordingNeedsRestart = access == .pendingRestart
+        conflictingCopyURL = InstallConflict.detect()
         NotificationCenter.default.addObserver(
             forName: NSApplication.didBecomeActiveNotification,
             object: nil,
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor in
+                self?.refreshConflictingCopy()
                 self?.refresh()
             }
         }
@@ -90,11 +118,12 @@ final class PermissionsManager {
     func refresh() {
         let ax = Self.readAccessibilityTrusted()
         let preflight = CGPreflightScreenCaptureAccess()
-        if screenRecordingTrustedAtLaunch && !preflight {
-            observedScreenRecordingGrant = false
-        } else if preflight || Self.screenRecordingListedInTCC() {
-            observedScreenRecordingGrant = true
-        }
+        observedScreenRecordingGrant = ScreenRecordingAccess.observedGrant(
+            trustedAtLaunch: screenRecordingTrustedAtLaunch,
+            preflight: preflight,
+            tccListed: Self.screenRecordingListedInTCC(),
+            previouslyObserved: observedScreenRecordingGrant
+        )
         let access = ScreenRecordingAccess.resolve(
             trustedAtLaunch: screenRecordingTrustedAtLaunch,
             preflight: preflight,
@@ -111,6 +140,10 @@ final class PermissionsManager {
         if changed {
             NotificationCenter.default.post(name: .omnibarPermissionsDidChange, object: nil)
         }
+    }
+
+    func refreshConflictingCopy() {
+        conflictingCopyURL = InstallConflict.detect()
     }
 
     func startPolling() {
@@ -131,18 +164,19 @@ final class PermissionsManager {
 
     @discardableResult
     func promptAccessibility() -> Bool {
-        let options = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
-        let trusted = AXIsProcessTrustedWithOptions(options)
-        accessibilityTrusted = trusted
-        // AXIsProcessTrustedWithOptions only presents once per process. Open the
-        // pane on every click so a dismissed Settings window can be brought back.
+        // Do not call AXIsProcessTrustedWithOptions(prompt: true). That presents
+        // Apple's "Open System Settings" / Deny alert on top of the Privacy pane
+        // we open here. Onboarding polls independently of that alert.
         Self.openPrivacySettings(anchor: "Privacy_Accessibility")
         startPolling()
-        return trusted
+        return accessibilityTrusted
     }
 
     @discardableResult
     func promptScreenRecording() -> Bool {
+        // Screen Recording only lists apps that have requested capture.
+        // CGRequestScreenCaptureAccess() inserts this process; the + button
+        // does not. The system alert is unavoidable on that first request.
         _ = CGRequestScreenCaptureAccess()
         Self.openPrivacySettings(anchor: "Privacy_ScreenCapture")
         startPolling()

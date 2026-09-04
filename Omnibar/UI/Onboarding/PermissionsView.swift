@@ -21,7 +21,7 @@ enum OnboardingWindow {
             let window = NSWindow(contentViewController: hosting)
             window.title = "Omnibar"
             window.styleMask = [.titled, .closable]
-            window.setContentSize(NSSize(width: 460, height: 430))
+            applyContentSize(window)
             window.center()
             window.isReleasedWhenClosed = false
             window.hidesOnDeactivate = false
@@ -34,6 +34,7 @@ enum OnboardingWindow {
 
     static func reveal() {
         guard isShowing, let window = controller?.window else { return }
+        PermissionsManager.shared.refreshConflictingCopy()
         if NSApp.isHidden {
             NSApp.unhide(nil)
         }
@@ -48,7 +49,17 @@ enum OnboardingWindow {
         // makeKeyAndOrderFront keeps an inactive app's window behind the active
         // app, so force it above other apps' windows as the last step.
         window.orderFrontRegardless()
+        applyContentSize(window)
         PermissionsManager.shared.refresh()
+    }
+
+    private static func applyContentSize(_ window: NSWindow) {
+        let presentation = OnboardingLogic.presentation(
+            accessibilityTrusted: PermissionsManager.shared.accessibilityTrusted,
+            screenRecording: PermissionsManager.shared.screenRecordingAccess,
+            conflictingCopyURL: PermissionsManager.shared.conflictingCopyURL
+        )
+        window.setContentSize(NSSize(width: OnboardingLogic.windowWidth, height: presentation.windowHeight))
     }
 
     static func dismiss() {
@@ -63,8 +74,10 @@ enum OnboardingWindow {
         PermissionsManager.shared.stopPolling()
         beginReopenSuppression()
         NSApp.setActivationPolicy(.accessory)
-        if AppRelaunch.isInProgress { return }
-        if PermissionsManager.shared.accessibilityTrusted {
+        if OnboardingLogic.shouldPostPermissionsDidChange(
+            relaunchInProgress: AppRelaunch.isInProgress,
+            accessibilityTrusted: PermissionsManager.shared.accessibilityTrusted
+        ) {
             NotificationCenter.default.post(name: .omnibarPermissionsDidChange, object: nil)
         }
     }
@@ -133,22 +146,35 @@ struct PermissionsView: View {
                 .font(.title2.bold())
             Text("Omnibar is a sensible taskbar for macOS. Accessibility is required to list and switch windows. Screen Recording is optional and only used for live hover thumbnails.")
                 .foregroundStyle(.secondary)
+            if let conflict = permissions.conflictingCopyURL {
+                HStack(alignment: .top) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.yellow)
+                        .font(.title3)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Another copy of Omnibar is installed at \(conflict.path). macOS applies Accessibility and Screen Recording grants to that copy. Move it to the Trash or quit and use it instead.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Button("Show in Finder") {
+                            NSWorkspace.shared.activateFileViewerSelecting([conflict])
+                        }
+                    }
+                }
+            }
             permissionRow(
                 title: "Accessibility",
                 subtitle: "Required to read window titles and raise, minimize, or close windows.",
-                granted: permissions.accessibilityTrusted,
-                showsAction: !permissions.accessibilityTrusted,
+                granted: presentation.accessibilityGranted,
+                showsAction: presentation.accessibilityShowsEnable,
                 actionTitle: "Enable Accessibility"
             ) {
                 _ = PermissionsManager.shared.promptAccessibility()
             }
             permissionRow(
                 title: "Screen Recording",
-                subtitle: permissions.screenRecordingNeedsRestart
-                    ? "Granted. Restart Omnibar to enable live hover thumbnails."
-                    : "Optional. Enables live window thumbnails on hover.",
-                granted: permissions.screenRecordingTrusted || permissions.screenRecordingNeedsRestart,
-                showsAction: !permissions.screenRecordingTrusted,
+                subtitle: presentation.screenRecordingSubtitle,
+                granted: presentation.screenRecordingGranted,
+                showsAction: presentation.screenRecordingShowsEnable,
                 actionTitle: "Enable Screen Recording"
             ) {
                 _ = PermissionsManager.shared.promptScreenRecording()
@@ -171,33 +197,36 @@ struct PermissionsView: View {
             Spacer()
             HStack {
                 Spacer()
-                Button(primaryTitle) {
-                    if permissions.screenRecordingNeedsRestart {
+                Button(presentation.primaryTitle) {
+                    switch presentation.primaryAction {
+                    case .relaunch:
                         AppRelaunch.perform()
-                    } else {
+                    case .dismiss:
                         OnboardingWindow.dismiss()
                     }
                 }
                 .keyboardShortcut(.defaultAction)
-                .disabled(primaryDisabled)
+                .disabled(!presentation.primaryEnabled)
             }
         }
         .padding(24)
-        .frame(width: 460, height: 410)
+        .frame(width: OnboardingLogic.windowWidth, height: presentation.contentHeight)
         .onAppear {
+            PermissionsManager.shared.refreshConflictingCopy()
             PermissionsManager.shared.refresh()
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            PermissionsManager.shared.refreshConflictingCopy()
             PermissionsManager.shared.refresh()
         }
     }
 
-    private var primaryTitle: String {
-        permissions.screenRecordingNeedsRestart ? "Restart" : "Continue"
-    }
-
-    private var primaryDisabled: Bool {
-        !permissions.screenRecordingNeedsRestart && !permissions.accessibilityTrusted
+    private var presentation: OnboardingLogic.Presentation {
+        OnboardingLogic.presentation(
+            accessibilityTrusted: permissions.accessibilityTrusted,
+            screenRecording: permissions.screenRecordingAccess,
+            conflictingCopyURL: permissions.conflictingCopyURL
+        )
     }
 
     @ViewBuilder

@@ -39,6 +39,52 @@ final class ScreenRecordingAccessTests: XCTestCase {
         )
     }
 
+    func testAccessAtLaunchIsTrustedOnlyWhenPreflightIsTrue() {
+        XCTAssertEqual(ScreenRecordingAccess.accessAtLaunch(preflight: true), .trusted)
+        XCTAssertEqual(ScreenRecordingAccess.accessAtLaunch(preflight: false), .denied)
+    }
+
+    func testObservedGrantSetsTrueFromPreflightOrTitles() {
+        XCTAssertTrue(
+            ScreenRecordingAccess.observedGrant(
+                trustedAtLaunch: false,
+                preflight: true,
+                tccListed: false,
+                previouslyObserved: false
+            )
+        )
+        XCTAssertTrue(
+            ScreenRecordingAccess.observedGrant(
+                trustedAtLaunch: false,
+                preflight: false,
+                tccListed: true,
+                previouslyObserved: false
+            )
+        )
+    }
+
+    func testObservedGrantStaysTrueWhenTitlesDisappear() {
+        XCTAssertTrue(
+            ScreenRecordingAccess.observedGrant(
+                trustedAtLaunch: false,
+                preflight: false,
+                tccListed: false,
+                previouslyObserved: true
+            )
+        )
+    }
+
+    func testObservedGrantClearsWhenPreflightDropsAfterLaunchGrant() {
+        XCTAssertFalse(
+            ScreenRecordingAccess.observedGrant(
+                trustedAtLaunch: true,
+                preflight: false,
+                tccListed: true,
+                previouslyObserved: true
+            )
+        )
+    }
+
     func testTitlesIndicateTCCGrantIgnoresOwnProcessAndEmptyNames() {
         let selfPID: pid_t = 42
         let windows: [[String: Any]] = [

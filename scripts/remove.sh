@@ -92,15 +92,20 @@ end tell
 EOF
 }
 
+unregister_app() {
+  local path="$1"
+  if [[ -x "$LSREGISTER" ]]; then
+    "$LSREGISTER" -u "$path" 2>/dev/null || true
+  fi
+}
+
 remove_app() {
   local path="$1"
   if [[ ! -e "$path" ]]; then
     return 0
   fi
   echo "Deleting $path"
-  if [[ -x "$LSREGISTER" ]]; then
-    "$LSREGISTER" -u "$path" 2>/dev/null || true
-  fi
+  unregister_app "$path"
   if ! rm -rf "$path"; then
     echo "Could not delete $path" >&2
   fi
@@ -109,6 +114,11 @@ remove_app() {
 quit_omnibar
 restore_dock
 remove_login_item
+
+# Unregister before brew deletes the files so Launch Services does not keep a
+# stale /Applications/Omnibar.app entry for the bundle ID.
+unregister_app "/Applications/Omnibar.app"
+unregister_app "${HOME}/Applications/Omnibar.app"
 
 if command -v brew >/dev/null 2>&1; then
   if brew list --cask "$CASK" >/dev/null 2>&1; then

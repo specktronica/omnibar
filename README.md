@@ -30,7 +30,7 @@ Quits Omnibar, restores the Dock if Omnibar had fully hidden it, deletes `/Appli
 open build/Omnibar.app
 ```
 
-`bootstrap.sh` generates `Omnibar.xcodeproj` with XcodeGen. `build.sh` produces `build/Omnibar.app`, signed with the "Apple Development" identity from your keychain when one is installed, or ad-hoc otherwise. Set `CODESIGN_IDENTITY` to pick a specific identity. Default configuration is Release.
+`bootstrap.sh` generates `Omnibar.xcodeproj` with XcodeGen. `build.sh` produces `build/Omnibar.app`. It signs with `CODESIGN_IDENTITY` if set, otherwise Developer ID Application, then Apple Development, then ad-hoc. Default configuration is Release.
 
 ```bash
 make build    # same as ./scripts/build.sh
@@ -55,14 +55,16 @@ The Xcode project is gitignored; `project.yml` is the source of truth.
 - **Accessibility** (required): list windows, raise / minimize / close / fullscreen, and read Dock badges.
 - **Screen Recording** (optional): live hover thumbnails. Without it, the preview shows the app icon and title.
 
-macOS records permission grants against the app's code-signing requirement. With a real signing identity the requirement is based on bundle ID and team, so grants survive rebuilds. With an ad-hoc signature the requirement is a per-build `cdhash`, so every rebuild needs a fresh grant: System Settings still shows Omnibar as enabled, but the new binary is not trusted. If that happens, remove the stale entry and grant again:
+macOS records permission grants against the app's code-signing requirement, on the copy Launch Services resolves for the bundle ID. "Quit & Reopen" after a Screen Recording grant relaunches that copy. `make run` signs with Developer ID Application when that identity is in the keychain so local builds match the Homebrew cask.
+
+With an ad-hoc signature the requirement is a per-build `cdhash`, so every rebuild needs a fresh grant: System Settings still shows Omnibar as enabled, but the new binary is not trusted. If that happens, remove the stale entry and grant again:
 
 ```bash
 tccutil reset Accessibility io.specktronica.omnibar
 tccutil reset ScreenCapture io.specktronica.omnibar
 ```
 
-Run only one copy of Omnibar at a time. Two builds with different signatures share the same bundle ID, and only one can match the recorded grant.
+Run only one copy of Omnibar at a time. Two builds with different signatures share the same bundle ID, and only one can match the recorded grant. If onboarding names another copy, move that copy to the Trash or quit and use it instead.
 
 Launch at login is on by default (`SMAppService`) and can be toggled in Settings → General.
 

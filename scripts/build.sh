@@ -43,12 +43,16 @@ redact_identity() {
 
 # TCC (Accessibility / Screen Recording) records a code-signing requirement for
 # the app. With an ad-hoc signature that requirement is a cdhash, which changes
-# on every build, so the grant stops matching the new binary. Prefer a real
-# identity from the keychain so the requirement is stable across rebuilds.
+# on every build, so the grant stops matching the new binary.
+#
+# Prefer Developer ID Application so `make run` shares the same designated
+# requirement as the Homebrew cask. System Settings binds a grant to the copy
+# Launch Services resolves for the bundle ID; a Development-signed local build
+# next to a Developer ID cask copy will not match that grant.
 #
 # CODESIGN_IDENTITY is optional. If it is unset, or set to a name that is not
 # in the keychain (a leftover Developer ID export with the wrong legal name is
-# the usual case), fall back to Apple Development so `make run` still works.
+# the usual case), try Developer ID Application, then Apple Development.
 REQUESTED="${CODESIGN_IDENTITY:-}"
 IDENTITY_HASH=""
 if [[ -n "$REQUESTED" ]]; then
@@ -59,10 +63,13 @@ if [[ -n "$REQUESTED" ]]; then
     if [[ -n "$hint" ]]; then
       echo "A Developer ID Application identity is installed; set CODESIGN_IDENTITY to its hash if you meant to use it." >&2
     fi
-    echo "Falling back to Apple Development for this local build." >&2
+    echo "Falling back to Developer ID Application, then Apple Development." >&2
   fi
 fi
 
+if [[ -z "$IDENTITY_HASH" ]]; then
+  IDENTITY_HASH="$(identity_hash "Developer ID Application")"
+fi
 if [[ -z "$IDENTITY_HASH" ]]; then
   IDENTITY_HASH="$(identity_hash "Apple Development")"
 fi
@@ -71,8 +78,8 @@ SIGN_OVERRIDES=()
 if [[ -z "$IDENTITY_HASH" ]]; then
   IDENTITY="-"
   IDENTITY_LABEL="ad-hoc"
-  echo "No Apple Development identity found; using ad-hoc signing." >&2
-  echo "Accessibility must be granted again after each rebuild." >&2
+  echo "No signing identity found; using ad-hoc signing." >&2
+  echo "Accessibility and Screen Recording must be granted again after each rebuild." >&2
   SIGN_OVERRIDES=(CODE_SIGN_IDENTITY="-" DEVELOPMENT_TEAM="" CODE_SIGN_STYLE=Manual)
 else
   IDENTITY="$IDENTITY_HASH"
@@ -110,10 +117,27 @@ mkdir -p build
 rm -rf build/Omnibar.app
 ditto "$APP_SRC" build/Omnibar.app
 
+# xcodebuild registers DerivedData products with Launch Services, including
+# Debug leftovers from tests. Unregister those copies before signing so
+# "Quit & Reopen" relaunches build/Omnibar.app.
+LSREGISTER="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
+if [[ -x "$LSREGISTER" ]]; then
+  shopt -s nullglob
+  for product in "$DERIVED/Build/Products"/*/Omnibar.app; do
+    "$LSREGISTER" -u "$product" 2>/dev/null || true
+  done
+  shopt -u nullglob
+fi
+
 codesign --force --deep --sign "$IDENTITY" \
   --entitlements Omnibar/Resources/Omnibar.entitlements \
   --options runtime \
+  --timestamp=none \
   build/Omnibar.app
+
+if [[ -x "$LSREGISTER" ]]; then
+  "$LSREGISTER" -f "$PWD/build/Omnibar.app"
+fi
 
 echo "Built build/Omnibar.app (signed with: $(redact_identity <<<"$IDENTITY_LABEL"))"
 codesign -d -r- build/Omnibar.app 2>&1 | grep designated | redact_identity || true

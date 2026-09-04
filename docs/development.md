@@ -53,9 +53,9 @@ The scheme is `Omnibar`; tests are attached as `OmnibarTests`.
 
 ## Signing
 
-`project.yml` requests the "Apple Development" identity and Hardened Runtime. `scripts/build.sh` looks up a keychain identity named `Apple Development` unless `CODESIGN_IDENTITY` is set. If none is found, it signs ad-hoc (`-`) and prints that Accessibility must be re-granted after every rebuild.
+`project.yml` requests the "Apple Development" identity and Hardened Runtime for Xcode IDE builds. `scripts/build.sh` prefers `CODESIGN_IDENTITY` if set, then Developer ID Application, then Apple Development, then ad-hoc. Developer ID makes `make run` share the same designated requirement as the Homebrew cask.
 
-After `xcodebuild`, the script copies the `.app` to `build/Omnibar.app` and `codesign`s it with `Omnibar/Resources/Omnibar.entitlements` and `--options runtime`.
+After `xcodebuild`, the script copies the `.app` to `build/Omnibar.app`, unregisters DerivedData products from Launch Services, `codesign`s with `Omnibar/Resources/Omnibar.entitlements`, `--options runtime`, and `--timestamp=none`, then registers `build/Omnibar.app`.
 
 ## Release zip
 
@@ -79,8 +79,12 @@ make release publish
 
 TCC (Accessibility and Screen Recording) stores a code-signing **requirement**, not just the bundle ID:
 
-- A development identity yields a requirement based on bundle ID and team, so grants survive rebuilds.
+- System Settings binds a grant to the copy Launch Services resolves for the bundle ID. "Quit & Reopen" relaunches that copy.
+- Developer ID and the published cask share a team-based requirement, so `make run` and a cask install are interchangeable when both are Developer ID signed.
+- A development identity yields a different requirement than Developer ID. Grants made while a cask copy is installed will not match an Xcode-signed process.
 - An ad-hoc signature yields a `cdhash` requirement. That hash changes every build, so System Settings can still show Omnibar enabled while the new binary is untrusted.
+
+If onboarding names another copy, move that copy to the Trash or quit and use it instead.
 
 Reset grants:
 

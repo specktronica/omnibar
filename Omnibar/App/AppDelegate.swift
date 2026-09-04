@@ -31,7 +31,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        if PermissionsManager.shared.accessibilityTrusted {
+        if OnboardingLogic.launchPath(
+            accessibilityTrusted: PermissionsManager.shared.accessibilityTrusted
+        ) == .startTaskbar {
             startIfPossible()
         } else {
             OnboardingWindow.show()
@@ -39,20 +41,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        if OnboardingWindow.shouldIgnoreReopen {
-            return false
-        }
-        if OnboardingWindow.isShowing {
+        switch OnboardingLogic.reopenAction(
+            suppressReopen: OnboardingWindow.shouldIgnoreReopen,
+            onboardingShowing: OnboardingWindow.isShowing,
+            accessibilityTrusted: PermissionsManager.shared.accessibilityTrusted
+        ) {
+        case .ignore, .none:
+            break
+        case .revealOnboarding:
             OnboardingWindow.reveal()
-            return false
-        }
-        if PermissionsManager.shared.accessibilityTrusted {
+        case .showSettings:
             SettingsWindow.show()
         }
         return false
     }
 
     func applicationDidBecomeActive(_ notification: Notification) {
+        PermissionsManager.shared.refreshConflictingCopy()
         PermissionsManager.shared.refresh()
         if OnboardingWindow.isShowing {
             OnboardingWindow.reveal()
@@ -72,10 +77,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func startIfPossible() {
         PermissionsManager.shared.refresh()
-        guard PermissionsManager.shared.accessibilityTrusted else { return }
-        guard !OnboardingWindow.isShowing else { return }
-        guard !AppRelaunch.isInProgress else { return }
-        guard !started else { return }
+        guard OnboardingLogic.shouldStartTaskbar(
+            accessibilityTrusted: PermissionsManager.shared.accessibilityTrusted,
+            onboardingShowing: OnboardingWindow.isShowing,
+            relaunchInProgress: AppRelaunch.isInProgress,
+            alreadyStarted: started
+        ) else { return }
         started = true
         WindowTracker.shared.start()
         ScreenMonitor.shared.start()
