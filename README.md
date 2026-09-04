@@ -36,8 +36,9 @@ open build/Omnibar.app
 make build    # same as ./scripts/build.sh
 make run      # build, kill a running Omnibar, open build/Omnibar.app
 make release  # Developer ID sign, notarize, staple, zip to build/Omnibar-<version>.zip
-make publish  # GitHub Release + Homebrew tap (needs the zip from make release)
-make remove   # uninstall Applications copies, Homebrew cask/tap, prefs, TCC, login item
+make publish      # GitHub Release + Homebrew tap (needs the zip from make release)
+make brew-install # install or upgrade the Homebrew cask
+make remove       # uninstall Applications copies, Homebrew cask/tap, prefs, TCC, login item
 ```
 
 Or open the generated project:

@@ -131,7 +131,7 @@ struct PermissionsView: View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Welcome to Omnibar")
                 .font(.title2.bold())
-            Text("Omnibar is a Windows-style taskbar for macOS. Accessibility is required to list and switch windows. Screen Recording is optional and only used for live hover thumbnails.")
+            Text("Omnibar is a sensible taskbar for macOS. Accessibility is required to list and switch windows. Screen Recording is optional and only used for live hover thumbnails.")
                 .foregroundStyle(.secondary)
             permissionRow(
                 title: "Accessibility",
