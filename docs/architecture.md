@@ -82,11 +82,11 @@ flowchart LR
   tiler --> ax[AXBridge.setFrame]
 ```
 
-`TilingGeometry` (Model) is pure and `nonisolated`: `Tile` frames inside a usable rect, the left/right/up cycle (`nextTile`), the usable area (`visibleFrame` with its bottom raised above the Taskbar when `ScreenMonitor.showsTaskbar(on:)`), and the Cocoa→CG inverse of `ScreenGeometry.cocoaRect`.
+`TilingGeometry` (Model) is pure and `nonisolated`: `Tile` frames inside a usable rect, the left/right/up/down cycle (`nextTile`), the usable area (`visibleFrame` with its bottom raised above the Taskbar when `ScreenMonitor.showsTaskbar(on:)`), and the Cocoa→CG inverse of `ScreenGeometry.cocoaRect`.
 
 `WindowTiler` resolves the frontmost app's focused window, requires `AXWindow` / `AXStandardWindow`, not fullscreen or minimized, and settable position and size (`AXUIElementIsAttributeSettable`). It converts between Cocoa and CG coordinates, calls `AXBridge.setFrame` (position, size, re-read, re-apply position if the app shifted the origin while clamping), and keeps `[CGWindowID: AppliedTile]` so a clamped window can still advance through the cycle. The memory is pruned to the current snapshot's window IDs on `.omnibarSnapshotDidChange`.
 
-`TilingHotkeys` registers Left/Right/Up Arrow with the configured modifiers through Carbon `RegisterEventHotKey` on the application event target. The C handler is `nonisolated` and hops to the main actor. No `CGEventTap` is used, so no Input Monitoring grant is needed. `eventHotKeyExistsErr` (another app owns the combination) is logged and left unregistered. Registration follows `tilingShortcutsEnabled` and `tilingModifiers` through `.omnibarSettingsDidChange`.
+`TilingHotkeys` registers Left/Right/Up/Down Arrow with the configured modifiers through Carbon `RegisterEventHotKey` on the application event target. The C handler is `nonisolated` and hops to the main actor. No `CGEventTap` is used, so no Input Monitoring grant is needed. `eventHotKeyExistsErr` (another app owns the combination) is logged and left unregistered. Registration follows `tilingShortcutsEnabled` and `tilingModifiers` through `.omnibarSettingsDidChange`.
 
 ## Persistence
 

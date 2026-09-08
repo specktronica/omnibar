@@ -58,6 +58,7 @@ final class TilingGeometryTests: XCTestCase {
         XCTAssertEqual(Tile.leftHalf.frame(in: usable), CGRect(x: 0, y: 50, width: 800, height: 825))
         XCTAssertEqual(Tile.rightHalf.frame(in: usable), CGRect(x: 800, y: 50, width: 800, height: 825))
         XCTAssertEqual(Tile.topHalf.frame(in: usable), CGRect(x: 0, y: 462, width: 1600, height: 413))
+        XCTAssertEqual(Tile.bottomHalf.frame(in: usable), CGRect(x: 0, y: 50, width: 1600, height: 412))
         XCTAssertEqual(Tile.bottomLeft.frame(in: usable), CGRect(x: 0, y: 50, width: 800, height: 412))
         XCTAssertEqual(Tile.topLeft.frame(in: usable), CGRect(x: 0, y: 462, width: 800, height: 413))
         XCTAssertEqual(Tile.bottomRight.frame(in: usable), CGRect(x: 800, y: 50, width: 800, height: 412))
@@ -76,9 +77,13 @@ final class TilingGeometryTests: XCTestCase {
         XCTAssertEqual(bottom.maxY, top.minY)
         XCTAssertEqual(bottom.height + top.height, odd.height)
         let topHalf = Tile.topHalf.frame(in: odd)
+        let bottomHalf = Tile.bottomHalf.frame(in: odd)
         XCTAssertEqual(topHalf.maxY, odd.maxY)
         XCTAssertEqual(topHalf.height, odd.height - floor(odd.height / 2))
         XCTAssertEqual(topHalf.width, odd.width)
+        XCTAssertEqual(bottomHalf.maxY, topHalf.minY)
+        XCTAssertEqual(bottomHalf.height + topHalf.height, odd.height)
+        XCTAssertEqual(bottomHalf.width, odd.width)
     }
 
     // MARK: Keyboard cycle
@@ -96,6 +101,10 @@ final class TilingGeometryTests: XCTestCase {
         XCTAssertEqual(
             TilingGeometry.nextTile(direction: .up, currentFrame: floating, usable: usable, remembered: nil),
             .topHalf
+        )
+        XCTAssertEqual(
+            TilingGeometry.nextTile(direction: .down, currentFrame: floating, usable: usable, remembered: nil),
+            .bottomHalf
         )
     }
 
@@ -118,6 +127,15 @@ final class TilingGeometryTests: XCTestCase {
         frame = tile.frame(in: usable)
         tile = TilingGeometry.nextTile(direction: .up, currentFrame: frame, usable: usable, remembered: nil)
         XCTAssertEqual(tile, .topHalf)
+    }
+
+    func testRepeatedDownPressesCycleBottomHalfAndMaximize() {
+        var frame = Tile.bottomHalf.frame(in: usable)
+        var tile = TilingGeometry.nextTile(direction: .down, currentFrame: frame, usable: usable, remembered: nil)
+        XCTAssertEqual(tile, .maximize)
+        frame = tile.frame(in: usable)
+        tile = TilingGeometry.nextTile(direction: .down, currentFrame: frame, usable: usable, remembered: nil)
+        XCTAssertEqual(tile, .bottomHalf)
     }
 
     func testFrameMatchToleratesSmallOffsets() {
@@ -146,6 +164,10 @@ final class TilingGeometryTests: XCTestCase {
             TilingGeometry.nextTile(direction: .up, currentFrame: frame, usable: usable, remembered: remembered),
             .topHalf
         )
+        XCTAssertEqual(
+            TilingGeometry.nextTile(direction: .down, currentFrame: frame, usable: usable, remembered: remembered),
+            .bottomHalf
+        )
         let topHalf = Tile.topHalf.frame(in: usable)
         let upRemembered = AppliedTile(tile: .topHalf, frame: topHalf)
         XCTAssertEqual(
@@ -155,6 +177,24 @@ final class TilingGeometryTests: XCTestCase {
         XCTAssertEqual(
             TilingGeometry.nextTile(direction: .right, currentFrame: topHalf, usable: usable, remembered: upRemembered),
             .rightHalf
+        )
+        XCTAssertEqual(
+            TilingGeometry.nextTile(direction: .down, currentFrame: topHalf, usable: usable, remembered: upRemembered),
+            .bottomHalf
+        )
+        let bottomHalf = Tile.bottomHalf.frame(in: usable)
+        let downRemembered = AppliedTile(tile: .bottomHalf, frame: bottomHalf)
+        XCTAssertEqual(
+            TilingGeometry.nextTile(direction: .left, currentFrame: bottomHalf, usable: usable, remembered: downRemembered),
+            .leftHalf
+        )
+        XCTAssertEqual(
+            TilingGeometry.nextTile(direction: .right, currentFrame: bottomHalf, usable: usable, remembered: downRemembered),
+            .rightHalf
+        )
+        XCTAssertEqual(
+            TilingGeometry.nextTile(direction: .up, currentFrame: bottomHalf, usable: usable, remembered: downRemembered),
+            .topHalf
         )
     }
 
@@ -189,6 +229,10 @@ final class TilingGeometryTests: XCTestCase {
             TilingGeometry.nextTile(direction: .up, currentFrame: frame, usable: usable, remembered: remembered),
             .topHalf
         )
+        XCTAssertEqual(
+            TilingGeometry.nextTile(direction: .down, currentFrame: frame, usable: usable, remembered: remembered),
+            .bottomHalf
+        )
     }
 
     func testRememberedTopHalfAdvancesToMaximizeWhenClamped() {
@@ -196,6 +240,15 @@ final class TilingGeometryTests: XCTestCase {
         let remembered = AppliedTile(tile: .topHalf, frame: clamped)
         XCTAssertEqual(
             TilingGeometry.nextTile(direction: .up, currentFrame: clamped, usable: usable, remembered: remembered),
+            .maximize
+        )
+    }
+
+    func testRememberedBottomHalfAdvancesToMaximizeWhenClamped() {
+        let clamped = CGRect(x: 0, y: 50, width: 1600, height: 500)
+        let remembered = AppliedTile(tile: .bottomHalf, frame: clamped)
+        XCTAssertEqual(
+            TilingGeometry.nextTile(direction: .down, currentFrame: clamped, usable: usable, remembered: remembered),
             .maximize
         )
     }

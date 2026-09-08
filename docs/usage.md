@@ -63,10 +63,11 @@ Default shortcuts are Control + Option + Arrow. The modifier set is configurable
 | ⌃⌥→ | Right half. Press again: top-right quarter, then bottom-right quarter, then right half |
 | ⌃⌥← | Left half. Press again: top-left quarter, then bottom-left quarter, then left half |
 | ⌃⌥↑ | Top half. Press again: fill the usable area, then top half |
+| ⌃⌥↓ | Bottom half. Press again: fill the usable area, then bottom half |
 
 Omnibar treats a press as a repeat when the focused window's frame is within 8 points of the last tile. If the app refused the size (a minimum-size clamp), the frame Omnibar observed after the last tile is used instead. Moving or resizing the window by hand restarts the cycle at the half.
 
-Choosing **Control** alone collides with Mission Control itself (⌃↑) and “Move left a space” / “Move right a space”. macOS takes those keys first, so tiling does nothing until you turn them off in System Settings → Keyboard → Keyboard Shortcuts → Mission Control. Settings → Tiling shows this note and a button to that pane.
+Choosing **Control** alone collides with Mission Control itself (⌃↑), “Application windows” (⌃↓), and “Move left a space” / “Move right a space”. macOS takes those keys first, so tiling does nothing until you turn them off in System Settings → Keyboard → Keyboard Shortcuts → Mission Control. Settings → Tiling shows this note and a button to that pane.
 
 If another app has already registered the same combination, Omnibar logs the conflict and leaves the shortcut unregistered.
 

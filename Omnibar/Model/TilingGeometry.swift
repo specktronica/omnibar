@@ -6,6 +6,7 @@ nonisolated enum Tile: String, Codable, CaseIterable, Sendable {
     case leftHalf
     case rightHalf
     case topHalf
+    case bottomHalf
     case topLeft
     case topRight
     case bottomLeft
@@ -29,6 +30,8 @@ nonisolated enum Tile: String, Codable, CaseIterable, Sendable {
             return CGRect(x: rightX, y: usable.minY, width: rightWidth, height: usable.height)
         case .topHalf:
             return CGRect(x: usable.minX, y: topY, width: usable.width, height: topHeight)
+        case .bottomHalf:
+            return CGRect(x: usable.minX, y: usable.minY, width: usable.width, height: halfHeight)
         case .topLeft:
             return CGRect(x: usable.minX, y: topY, width: halfWidth, height: topHeight)
         case .topRight:
@@ -48,12 +51,14 @@ nonisolated enum TileDirection: Sendable {
     case left
     case right
     case up
+    case down
 
     var sequence: [Tile] {
         switch self {
         case .left: [.leftHalf, .topLeft, .bottomLeft]
         case .right: [.rightHalf, .topRight, .bottomRight]
         case .up: [.topHalf, .maximize]
+        case .down: [.bottomHalf, .maximize]
         }
     }
 }

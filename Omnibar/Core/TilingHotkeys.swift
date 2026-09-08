@@ -1,7 +1,7 @@
 import Carbon
 import Foundation
 
-/// Global Left/Right/Up Arrow hotkeys for keyboard tiling. Uses Carbon
+/// Global Left/Right/Up/Down Arrow hotkeys for keyboard tiling. Uses Carbon
 /// `RegisterEventHotKey`, which needs no Input Monitoring grant and does not
 /// see any other keystrokes.
 final class TilingHotkeys {
@@ -11,12 +11,14 @@ final class TilingHotkeys {
         case left = 1
         case right = 2
         case up = 3
+        case down = 4
 
         var virtualKey: UInt32 {
             switch self {
             case .left: UInt32(kVK_LeftArrow)
             case .right: UInt32(kVK_RightArrow)
             case .up: UInt32(kVK_UpArrow)
+            case .down: UInt32(kVK_DownArrow)
             }
         }
 
@@ -25,6 +27,7 @@ final class TilingHotkeys {
             case .left: .left
             case .right: .right
             case .up: .up
+            case .down: .down
             }
         }
 
@@ -33,6 +36,7 @@ final class TilingHotkeys {
             case .left: "←"
             case .right: "→"
             case .up: "↑"
+            case .down: "↓"
             }
         }
     }
@@ -86,7 +90,7 @@ final class TilingHotkeys {
 
     private func register(modifiers: TilingModifiers) {
         installHandlerIfNeeded()
-        for key in [HotKey.left, HotKey.right, HotKey.up] {
+        for key in [HotKey.left, HotKey.right, HotKey.up, HotKey.down] {
             var ref: EventHotKeyRef?
             let id = EventHotKeyID(signature: Self.signature, id: key.rawValue)
             let status = RegisterEventHotKey(
