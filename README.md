@@ -1,6 +1,6 @@
 # Omnibar
 
-Windows-style taskbar for macOS. One bar per display, per-window switching, hover thumbnails, pinning, Spaces support, and a Start Menu.
+Windows-style taskbar for macOS. One bar per display, window switching, hover thumbnails, pinning, Spaces support, and a Start Menu.
 
 ![Omnibar taskbar with Start button and running app tiles](assets/media/omnibar.png)
 
@@ -32,11 +32,15 @@ After install, grant **Accessibility** in System Settings. **Screen Recording** 
 
 ## Uninstall
 
+Quit Omnibar first so it can restore the Dock. Then:
+
 ```bash
-make remove
+brew uninstall --cask --zap specktronica/omnibar/omnibar
 ```
 
-Quits Omnibar, restores the Dock if Omnibar had fully hidden it, deletes `/Applications/Omnibar.app`, `~/Applications/Omnibar.app`, and Xcode DerivedData `Omnibar.app` products, uninstalls the Homebrew cask, untaps `specktronica/omnibar`, unregisters leftover Launch Services copies, removes preferences and caches, resets Accessibility and Screen Recording grants, and deletes the login item. Repo build products (`build/Omnibar.app`, `build/DerivedData`) are left in place.
+`--zap` removes the app, login item, prefs, and caches. It does not reset TCC, untap `specktronica/omnibar`, or delete Xcode DerivedData copies. If Omnibar is already quit, zap can delete the Dock backup without restoring it (Dock stuck at the top with a long autohide delay).
+
+From a clone, `make remove` is the full cleanup: it restores the Dock from `omnibar.dock.backup.v1` or the fully-hidden signature even when the app is not running, deletes `/Applications/Omnibar.app`, `~/Applications/Omnibar.app`, and Xcode DerivedData `Omnibar.app` products, uninstalls the Homebrew cask, untaps `specktronica/omnibar`, unregisters leftover Launch Services copies, removes preferences and caches, resets Accessibility and Screen Recording grants, and deletes the login item. Repo build products (`build/Omnibar.app`, `build/DerivedData`) are left in place.
 
 ## Build
 
@@ -69,7 +73,7 @@ The Xcode project is gitignored; `project.yml` is the source of truth.
 ## Permissions
 
 - **Accessibility** (required): list windows, raise / minimize / close / fullscreen, and read Dock badges.
-- **Screen Recording** (optional): live hover thumbnails. Without it, the preview shows the app icon and title.
+- **Screen Recording** (optional): live hover thumbnails. Without it, the preview shows the app icon.
 
 macOS records permission grants against the app's code-signing requirement, on the copy Launch Services resolves for the bundle ID. "Quit & Reopen" after a Screen Recording grant relaunches that copy. `make run` signs with Developer ID Application when that identity is in the keychain so local builds match the Homebrew cask.
 
@@ -93,11 +97,11 @@ Signing, TCC, and tests are covered in [docs/development.md](docs/development.md
 - Show desktop: thin slice on the right of the bar; click to minimize all windows, click again to restore
 - Start button logo: color presets, or pick each lobe
 - Start Menu with search, A–Z app list, pinned grid, and recent apps
-- Per-window tiles with icon, title, and Dock badges; click to raise, click the active tile to minimize (or hide)
+- Tiles with icon, title, and Dock badges (grouped by app by default, or one tile per window); click to raise, click the active tile to minimize (or hide)
 - Middle-click a tile for New Window
 - Hover thumbnails with configurable delay and size
 - Keep in Taskbar, blacklist, New Window, Hide, Quit, Fullscreen, Minimize, Close
-- Spaces: show windows on the current Space; hide the bar in fullscreen Spaces
+- Spaces: show windows on the current Space (minimized windows stay on their last screen); hide the bar in fullscreen Spaces
 - Drag to reorder, group by application, icons-only mode
 - Multi-monitor: one bar per screen, main-display-only, hide per display
 - Auto-resize overlapping windows, fully hide Dock (moved to the top, including Mission Control, reverted on quit), auto-hide the bar

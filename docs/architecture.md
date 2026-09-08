@@ -14,7 +14,7 @@ Omnibar/
   Resources/    assets, entitlements
 OmnibarTests/   logic and geometry tests (no live window-server tests)
 project.yml     XcodeGen spec
-scripts/        bootstrap (XcodeGen), build, release zip, Homebrew publish
+scripts/        bootstrap (XcodeGen), build, package/notarize, Homebrew publish, uninstall, secret scan
 ```
 
 ## Startup
@@ -25,7 +25,7 @@ scripts/        bootstrap (XcodeGen), build, release zip, Homebrew publish
 2. Create the menu extra (`StatusItemController`).
 3. Start `AppCatalog` (application directories + recents).
 4. Apply Dock hiding from settings (`DockManager`).
-5. If Accessibility is trusted, start `WindowTracker` and `ScreenMonitor`. Otherwise show onboarding. The taskbar does not start while onboarding is showing; Continue (or closing the window) posts `.omnibarPermissionsDidChange` after `isShowing` is cleared. Screen Recording is effective for capture only when `CGPreflightScreenCaptureAccess()` was already true at process start. A mid-session grant is pending restart: preflight stays false until relaunch, so onboarding detects the TCC toggle via other processes’ normal-level window titles (`kCGWindowName`). Menu bar, wallpaper, Dock, and Control Center titles are ignored because they appear without Screen Recording.
+5. If Accessibility is trusted, start `WindowTracker` and `ScreenMonitor`. Otherwise show onboarding. The taskbar does not start while onboarding is showing; Continue (or closing the window) posts `.omnibarPermissionsDidChange` after `isShowing` is cleared. Screen Recording is effective for capture only when `CGPreflightScreenCaptureAccess()` was already true at process start. A mid-session grant is pending restart: preflight stays false until relaunch, so onboarding detects the TCC toggle via other processes’ normal-level window titles (`kCGWindowName`). Windows not at the normal window level (menu bar, wallpaper, Dock, Control Center) are ignored because those titles appear without Screen Recording.
 
 On quit, Dock prefs are restored, then tracker, screen monitor, and catalog stop.
 
@@ -51,11 +51,11 @@ flowchart LR
 - screen parameter changes, settings/pins/blacklist/badge notifications
 - a repeating poll (`pollInterval`, minimum 0.5 s)
 
-`WindowScanner` (an actor) builds `WindowInfo` from Accessibility windows crossed with `CGWindowListCopyWindowInfo`. It keeps layer-0 windows of regular apps, skips a hard-coded system set and the blacklist, and drops untitled floating windows.
+`WindowScanner` (an actor) builds `WindowInfo` from Accessibility windows crossed with `CGWindowListCopyWindowInfo`. It keeps layer-0 windows of regular apps, skips a hard-coded system set and the blacklist, drops untitled floating windows (`AXFloatingWindow` / `AXSystemFloatingWindow` with an empty title), and drops frames smaller than 40×40 points.
 
 Space membership and “this display is a fullscreen Space” come from private SkyLight symbols loaded in `CGSBridge` (`CGSCopyManagedDisplaySpaces` / `SLS…` and related). `TaskListLogic` then:
 
-- filters to the current Space (unless “show windows from all screens”)
+- filters to the current Space (unless “show windows from all screens”); minimized windows remain on their last screen
 - optionally collapses same-title tabs
 - groups by application or emits one tile per window
 - inserts pinned launchers for bundle IDs with no open windows
@@ -67,7 +67,7 @@ Space membership and “this display is a fullscreen Space” come from private 
 
 `WindowActions` raises, minimizes, unminimizes, closes, fullscreens, hides, quits, and “New Window” through `AXBridge` and `NSRunningApplication`. Primary click and middle-click are handled there. The thin Show desktop slice on the right of each bar calls `ShowDesktopController`, which minimizes every visible window on the current Spaces and restores that set on the next click.
 
-Each `TaskbarPanel` owns a `StartMenuPanel` and `ThumbnailPopover`. Thumbnails use ScreenCaptureKit (`ThumbnailService`) when Screen Recording is granted.
+Each `TaskbarPanel` owns a `StartMenuPanel` and `ThumbnailPopover`. Thumbnails use ScreenCaptureKit (`ThumbnailService`) only when Screen Recording was already granted at process start (`PermissionsManager.screenRecordingTrusted`).
 
 `OverlapResizer` optionally shrinks windows whose Cocoa frames intersect the bar, skipping fullscreen/minimized/hidden windows, a bundle skip list, and PIDs that failed verification twice.
 
@@ -83,7 +83,7 @@ All of these are keys in `UserDefaults.standard`:
 | `omnibar.pins.v1` | pinned bundle IDs, order preserved |
 | `omnibar.blacklist.v1` | blacklisted bundle IDs |
 | `omnibar.recents.v1` | recent-launch bundle IDs |
-| `omnibar.dock.backup.v1` | Dock autohide/orientation backup while fully hidden |
+| `omnibar.dock.backup.v1` | Dock autohide, delay, time-modifier, and orientation backup while fully hidden |
 
 `OrderStore` is memory-only. `SettingsStore.resetToDefaults()` keeps the current launch-at-login value, writes default settings, reverts Dock, and clears order.
 
@@ -102,4 +102,4 @@ The app is not sandboxed (`ENABLE_APP_SANDBOX` is NO; entitlements file is empty
 
 ## Tests
 
-`OmnibarTests` covers stores, list logic, geometry, paging, settings decode, and related pure helpers. Tests load the app as `TEST_HOST`. `AppDelegate` returns immediately when `XCTestCase` is present so the live tracker does not start inside the test host.
+`OmnibarTests` covers stores, list logic, geometry, paging, settings decode, onboarding/TCC helpers, thumbnails, show-desktop, overlap, and related pure helpers. Tests load the app as `TEST_HOST`. `AppDelegate` returns immediately when `XCTestCase` is present so the live tracker does not start inside the test host.

@@ -1,10 +1,10 @@
 # Usage
 
-Omnibar is a bottom-of-screen taskbar. It lists windows on the current Space, optional pinned apps, and a Start button. There is no Dock icon while it is running, except during first-run onboarding.
+Omnibar is a bottom-of-screen taskbar. It lists windows on the current Space (minimized windows stay on their last screen), optional pinned apps, and a Start button. Tiles are grouped by application by default. There is no Dock icon while it is running, except during first-run onboarding.
 
 ## First launch
 
-If Accessibility is not granted, an onboarding window appears. Continue is disabled until Accessibility is on. The taskbar appears only after you click Continue (or close the window). Screen Recording and “Hide the macOS Dock” are optional on that screen. Granting Screen Recording during that first launch does not take effect until Omnibar restarts: the row marks as granted, Continue becomes Restart, and Enable Screen Recording stays available until the new process starts.
+If Accessibility is not granted, an onboarding window appears. Continue stays disabled until Accessibility is on. The taskbar appears only after you click Continue (or close the window). Screen Recording and “Hide the macOS Dock” are optional on that screen. Granting Screen Recording in this session does not enable live thumbnails until Omnibar relaunches: the row marks as granted, the primary button becomes Restart (that button is enabled even if Accessibility is still off), and Enable Screen Recording stays available until the new process starts.
 
 After that, Omnibar lives in the menu bar. The extra’s menu is **Settings…** (⌘,), **Tip Omnibar…**, and **Quit Omnibar** (⌘Q). **Tip Omnibar…** opens the Ko-fi page in a browser. Clicking the app again while it is already running opens Settings, as long as Accessibility is granted.
 
@@ -73,9 +73,11 @@ Reset to defaults restores `AppSettings.default` except **Launch at login**, whi
 | Setting | Default |
 | --- | --- |
 | Match system appearance | on |
+| Force dark mode | off (ignored while matching system appearance) |
 | Transparency | 0.55 |
 | Taskbar height | 50 pt (slider 28–64) |
 | Font size | 12 (slider 10–16) |
+| Hide window titles (icons only) | off |
 | Group by application | on |
 | Show tabs as individual items | on |
 | Indicate minimized or hidden | on |
@@ -83,6 +85,7 @@ Reset to defaults restores `AppSettings.default` except **Launch at login**, whi
 | Show desktop button | on |
 | Thumbnail delay | 0.4 s (0–1.5) |
 | Thumbnail size | 240 (140–420) |
+| Show window title in thumbnail | off |
 | Show windows from all screens | off |
 | Main display only | off |
 | Auto-resize overlapping windows | on |
@@ -100,7 +103,7 @@ Logo presets: Classic, Sunset, Ocean, Forest, Candy, Neon, Mono. Each of the fou
 
 ### Dock hiding
 
-When **Fully hide Dock** is on, Omnibar backs up `com.apple.dock` autohide, delay, time-modifier, and orientation, then sets autohide with a large delay, moves the Dock to the top, and restarts Dock. During Mission Control it also lowers Dock strip windows so they do not flash on the bottom edge. The backup is restored when you turn the setting off, reset settings, or quit Omnibar.
+When **Fully hide Dock** is on, Omnibar backs up `com.apple.dock` autohide, delay, time-modifier, and orientation, then sets autohide with a large delay, moves the Dock to the top, and restarts Dock. During Mission Control it also lowers Dock strip windows so they do not flash on the bottom edge. The backup is restored when you turn the setting off, reset settings, or quit Omnibar. A force-quit or a Homebrew `--zap` while Omnibar is not running can leave the Dock on the top edge; launch Omnibar and turn the setting off, or run `make remove`.
 
 ### Auto-hide
 

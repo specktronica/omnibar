@@ -5,6 +5,8 @@
 - macOS 14 or later
 - Xcode with the macOS 14+ SDK
 - [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen` — `scripts/bootstrap.sh` installs it via Homebrew if missing)
+- `python3` for `make release` / `make publish` (notary JSON and cask patching)
+- authenticated `gh` for `make publish` (`brew install gh`)
 
 Swift version is 6.0 (`SWIFT_VERSION` in `project.yml`), with complete strict concurrency and `-default-isolation=MainActor`.
 
@@ -38,7 +40,7 @@ make run
 
 `make run` kills an existing `Omnibar` process, then `open`s `build/Omnibar.app`.
 
-`make remove` (`scripts/remove.sh`) uninstalls installed copies. It quits a running Omnibar (Apple Event, then SIGTERM/SIGKILL), restores Dock settings from `omnibar.dock.backup.v1` when that key exists, or from the fully-hidden signature (`autohide-delay` 1000 and orientation `top`), deletes the System Events login item named Omnibar, runs `brew uninstall --cask --zap omnibar` when the cask is installed, deletes `/Applications/Omnibar.app` and `~/Applications/Omnibar.app`, deletes Xcode DerivedData `Omnibar.app` products (`~/Library/Developer/Xcode/DerivedData/Omnibar-*/Build/Products/*/Omnibar.app`), unregisters remaining Launch Services records for `io.specktronica.omnibar`, deletes the `io.specktronica.omnibar` defaults domain and related Library caches, runs `tccutil reset All io.specktronica.omnibar`, and untaps `specktronica/omnibar`. It does not delete `build/Omnibar.app` or `build/DerivedData`.
+`make remove` (`scripts/remove.sh`) uninstalls installed copies. It quits a running Omnibar (Apple Event, then SIGTERM/SIGKILL), restores Dock settings from `omnibar.dock.backup.v1` when that key exists, or from the fully-hidden signature (`autohide-delay` 1000 and orientation `top`), deletes the System Events login item named Omnibar, runs `brew uninstall --cask --zap omnibar` when the cask is installed, deletes `/Applications/Omnibar.app` and `~/Applications/Omnibar.app`, deletes Xcode DerivedData `Omnibar.app` products (`~/Library/Developer/Xcode/DerivedData/Omnibar-*/Build/Products/*/Omnibar.app`), unregisters remaining Launch Services records for `io.specktronica.omnibar`, deletes the `io.specktronica.omnibar` defaults domain and related Library caches, runs `tccutil reset All io.specktronica.omnibar`, and untaps `specktronica/omnibar`. It does not delete `build/Omnibar.app` or `build/DerivedData`. `brew uninstall --cask --zap specktronica/omnibar/omnibar` is the cask-only path; if Omnibar is not running, zap can delete the Dock backup without restoring it. If `sfltool dumpbtm` still lists `io.specktronica.omnibar` after `make remove`, disable the leftover Login Item in System Settings → General → Login Items.
 
 Derived data for script builds lives in `build/DerivedData`. The copied app is `build/Omnibar.app`.
 
@@ -59,7 +61,7 @@ After `xcodebuild`, the script copies the `.app` to `build/Omnibar.app`, unregis
 
 ## Release zip
 
-`make release` (or `./scripts/package.sh`) builds a **universal** (arm64 + x86_64) app with the first **Developer ID Application** identity in the keychain, re-signs with a secure timestamp, submits a zip to Apple notary, staples the ticket, and writes `build/Omnibar-<MARKETING_VERSION>.zip` plus its SHA-256. Local `make build` stays host-architecture unless `ARCHS` is set.
+`make release` (or `./scripts/package.sh`) builds a **universal** (arm64 + x86_64) app with the first **Developer ID Application** identity in the keychain, re-signs with a secure timestamp, submits a zip to Apple notary, staples the ticket, and writes `build/Omnibar-<MARKETING_VERSION>.zip` plus its SHA-256. Local `make build` stays host-architecture unless `ARCHS` is set. Notary JSON is parsed with `python3`.
 
 It does not fall back to Apple Development. Override the identity with `CODESIGN_IDENTITY` (exact common name or SHA-1 hash). The notary keychain profile defaults to `notarytool-specktronica`; override with `NOTARYTOOL_PROFILE`. Store credentials interactively (the tool prompts; do not put a password on the command line or in git):
 
@@ -69,7 +71,7 @@ xcrun notarytool store-credentials notarytool-specktronica
 
 `SKIP_NOTARY=1 make release` writes the zip without notarization. That archive will not pass Gatekeeper.
 
-`make publish` (or `./scripts/publish.sh`) uploads `build/Omnibar-<version>.zip` to a GitHub Release on tag `v<version>` and sets `version` and `sha256` in [specktronica/homebrew-omnibar](https://github.com/specktronica/homebrew-omnibar) `Casks/omnibar.rb`. The zip must be stapled; `SKIP_NOTARY=1` archives are rejected. Creating a new tag requires a clean `main` that matches `origin/main`. `DRY_RUN=1` prints the plan. `FORCE=1` replaces a same-version release asset and cask checksum.
+`make publish` (or `./scripts/publish.sh`) needs authenticated `gh` (`brew install gh`) and `python3`. It uploads `build/Omnibar-<version>.zip` to a GitHub Release on tag `v<version>` and sets `version` and `sha256` in [specktronica/homebrew-omnibar](https://github.com/specktronica/homebrew-omnibar) `Casks/omnibar.rb`. The zip must be stapled; `SKIP_NOTARY=1` archives are rejected. Creating a new tag requires a clean `main` that matches `origin/main`. `DRY_RUN=1` prints the plan. `FORCE=1` replaces a same-version release asset and cask checksum.
 
 ```bash
 make release publish
