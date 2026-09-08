@@ -173,6 +173,26 @@ nonisolated enum AXBridge {
         }
     }
 
+    static func isSettable(_ element: AXUIElement, attribute: String) -> Bool {
+        var settable: DarwinBoolean = false
+        let err = AXUIElementIsAttributeSettable(element, attribute as CFString, &settable)
+        return err == .success && settable.boolValue
+    }
+
+    /// Moves and resizes a window, then returns the frame the app reports.
+    /// Apps that clamp the size to a minimum can shift the origin while doing
+    /// so; the position is re-applied once when that happens.
+    static func setFrame(_ element: AXUIElement, cgFrame: CGRect) -> CGRect? {
+        setPosition(element, cgFrame.origin)
+        setSize(element, cgFrame.size)
+        guard var observed = frame(of: element) else { return nil }
+        if abs(observed.origin.x - cgFrame.origin.x) > 1 || abs(observed.origin.y - cgFrame.origin.y) > 1 {
+            setPosition(element, cgFrame.origin)
+            observed = frame(of: element) ?? observed
+        }
+        return observed
+    }
+
     static func findMenuItem(pid: pid_t, titles: [String]) -> AXUIElement? {
         let app = application(pid: pid)
         guard let menuBar = copyElement(app, attribute: kAXMenuBarAttribute as String) else { return nil }

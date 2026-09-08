@@ -18,7 +18,10 @@ final class AppSettingsDecodeTests: XCTestCase {
             "showDesktopButton",
             "mainDisplayOnly",
             "autoHide",
-            "showTabsAsItems"
+            "showTabsAsItems",
+            "tilingShortcutsEnabled",
+            "tilingModifiers",
+            "dragToTileEnabled"
         ] {
             object.removeValue(forKey: key)
         }
@@ -33,8 +36,31 @@ final class AppSettingsDecodeTests: XCTestCase {
         XCTAssertEqual(decoded.mainDisplayOnly, AppSettings.default.mainDisplayOnly)
         XCTAssertEqual(decoded.autoHide, AppSettings.default.autoHide)
         XCTAssertEqual(decoded.showTabsAsItems, AppSettings.default.showTabsAsItems)
+        XCTAssertEqual(decoded.tilingShortcutsEnabled, AppSettings.default.tilingShortcutsEnabled)
+        XCTAssertTrue(decoded.tilingShortcutsEnabled)
+        XCTAssertEqual(decoded.tilingModifiers, AppSettings.default.tilingModifiers)
+        XCTAssertEqual(decoded.tilingModifiers, .controlOption)
+        XCTAssertEqual(decoded.dragToTileEnabled, AppSettings.default.dragToTileEnabled)
+        XCTAssertTrue(decoded.dragToTileEnabled)
         XCTAssertEqual(decoded.transparency, 0.33)
         XCTAssertEqual(decoded.startButtonAction, .launchpad)
+    }
+
+    @MainActor
+    func testTilingModifiersPersistAndUnknownValueFailsDecode() throws {
+        var settings = AppSettings.default
+        settings.tilingModifiers = .controlCommand
+        settings.dragToTileEnabled = false
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: try JSONEncoder().encode(settings))
+        XCTAssertEqual(decoded.tilingModifiers, .controlCommand)
+        XCTAssertFalse(decoded.dragToTileEnabled)
+
+        var object = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: try JSONEncoder().encode(AppSettings.default)) as? [String: Any]
+        )
+        object["tilingModifiers"] = "shift"
+        let data = try JSONSerialization.data(withJSONObject: object)
+        XCTAssertThrowsError(try JSONDecoder().decode(AppSettings.self, from: data))
     }
 
     @MainActor

@@ -16,7 +16,8 @@ enum SettingsWindow {
         let window = NSWindow(contentViewController: hosting)
         window.title = "Omnibar Settings"
         window.styleMask = [.titled, .closable, .miniaturizable]
-        window.setContentSize(NSSize(width: 640, height: 620))
+        // Ten tab labels need about 700 pt before the tab bar truncates them.
+        window.setContentSize(NSSize(width: 720, height: 620))
         window.center()
         let controller = NSWindowController(window: window)
         Self.controller = controller
@@ -33,6 +34,7 @@ struct SettingsRootView: View {
             GeneralPane(settings: $store.settings).tabItem { Label("General", systemImage: "gearshape") }
             AppearancePane(settings: $store.settings).tabItem { Label("Appearance", systemImage: "paintbrush") }
             BehaviorPane(settings: $store.settings).tabItem { Label("Behavior", systemImage: "pointer.arrow.click") }
+            TilingPane(settings: $store.settings).tabItem { Label("Tiling", systemImage: "rectangle.split.2x1") }
             ThumbnailsPane(settings: $store.settings).tabItem { Label("Thumbnails", systemImage: "rectangle.on.rectangle") }
             DisplaysPane(settings: $store.settings).tabItem { Label("Displays", systemImage: "display.2") }
             StartMenuPane(settings: $store.settings).tabItem { Label("Start Menu", systemImage: "square.grid.2x2") }
@@ -41,7 +43,7 @@ struct SettingsRootView: View {
             AboutPane().tabItem { Label("About", systemImage: "info.circle") }
         }
         .padding(16)
-        .frame(minWidth: 600, minHeight: 520)
+        .frame(minWidth: 680, minHeight: 520)
         // Native NSSwitch uses controlAccentColor, which AppKit draws as
         // graphite when this accessory app's window is not key.
         .toggleStyle(PersistentSwitchToggleStyle())
@@ -245,6 +247,64 @@ private struct BehaviorPane: View {
             Toggle("Auto-resize windows that overlap Taskbar", isOn: $settings.autoResizeOverlapping)
         }
         .formStyle(.grouped)
+    }
+}
+
+private struct TilingPane: View {
+    @Binding var settings: AppSettings
+    @State private var systemEdgeTiling = DragSnapController.systemEdgeTilingEnabled
+
+    private static let keyboardShortcutsURL = URL(
+        string: "x-apple.systempreferences:com.apple.Keyboard-Settings.extension?Shortcuts"
+    )
+
+    var body: some View {
+        Form {
+            Section("Keyboard") {
+                Toggle("Tile the focused window with keyboard shortcuts", isOn: $settings.tilingShortcutsEnabled)
+                Picker("Modifiers", selection: $settings.tilingModifiers) {
+                    ForEach(TilingModifiers.allCases) { modifiers in
+                        Text(modifiers.title).tag(modifiers)
+                    }
+                }
+                .disabled(!settings.tilingShortcutsEnabled)
+                LabeledContent("Tile left", value: "\(settings.tilingModifiers.symbol)←")
+                LabeledContent("Tile right", value: "\(settings.tilingModifiers.symbol)→")
+                Text("Press again to cycle: half → top quarter → bottom quarter → half.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                if settings.tilingModifiers.conflictsWithMissionControl {
+                    Text("Mission Control uses Control + Arrow to switch Spaces and takes the key first. Turn off “Move left a space” and “Move right a space” under Keyboard Shortcuts → Mission Control.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Button("Open Keyboard Shortcuts…") {
+                        if let url = Self.keyboardShortcutsURL {
+                            NSWorkspace.shared.open(url)
+                        }
+                    }
+                }
+            }
+            Section("Mouse") {
+                Toggle("Drag a window to a screen edge to tile it", isOn: $settings.dragToTileEnabled)
+                Text("Left or right edge: half. Top or bottom fifth of that edge: quarter. Top edge: fill the screen. Tiles sit above the Taskbar. Edges shared with another display do not snap.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                if settings.dragToTileEnabled, systemEdgeTiling {
+                    Text("macOS also tiles windows dragged to a screen edge, and its tiles cover the Taskbar. Omnibar corrects the frame after the macOS animation. To avoid the double move, turn off “Tile by dragging windows to screen edges” under Desktop & Dock → Windows.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Button("Open Desktop & Dock…") {
+                        if let url = DragSnapController.systemWindowsSettingsURL {
+                            NSWorkspace.shared.open(url)
+                        }
+                    }
+                }
+            }
+        }
+        .formStyle(.grouped)
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            systemEdgeTiling = DragSnapController.systemEdgeTilingEnabled
+        }
     }
 }
 

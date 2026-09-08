@@ -70,6 +70,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         DockManager.shared.revertIfNeeded()
+        TilingHotkeys.shared.stop()
+        DragSnapController.shared.stop()
         WindowTracker.shared.stop()
         ScreenMonitor.shared.stop()
         AppCatalog.shared.stop()
@@ -86,5 +88,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         started = true
         WindowTracker.shared.start()
         ScreenMonitor.shared.start()
+        TilingHotkeys.shared.start()
+        DragSnapController.shared.start()
     }
 }

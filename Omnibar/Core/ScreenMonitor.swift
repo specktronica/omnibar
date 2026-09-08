@@ -53,6 +53,18 @@ final class ScreenMonitor {
         panels[displayID]
     }
 
+    /// True when a bar is shown on that display (not hidden by settings or a
+    /// fullscreen Space). Auto-hidden bars still count; they own the edge.
+    func showsTaskbar(on displayID: CGDirectDisplayID) -> Bool {
+        guard let panel = panels[displayID] else { return false }
+        return !panel.isSuppressed
+    }
+
+    /// True when the point is over any bar, Start Menu, or thumbnail popover.
+    func ownsCursor(_ point: NSPoint) -> Bool {
+        panels.values.contains { !$0.isSuppressed && $0.ownsCursor(point) }
+    }
+
     func rebuild(recreate: Bool = false) {
         if recreate {
             panels.values.forEach { $0.close() }

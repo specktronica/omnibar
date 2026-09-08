@@ -45,6 +45,9 @@ struct AppSettings: Codable, Equatable, Sendable {
     var startButtonAction: StartButtonAction = .startMenu
     var recentAppsLimit: Int = 10
     var startLogo: StartLogoPalette = .classic
+    var tilingShortcutsEnabled: Bool = true
+    var tilingModifiers: TilingModifiers = .controlOption
+    var dragToTileEnabled: Bool = true
 
     static let `default` = AppSettings()
 
@@ -95,6 +98,9 @@ extension AppSettings {
         case startButtonAction
         case recentAppsLimit
         case startLogo
+        case tilingShortcutsEnabled
+        case tilingModifiers
+        case dragToTileEnabled
     }
 
     init(from decoder: Decoder) throws {
@@ -141,5 +147,11 @@ extension AppSettings {
             ?? defaults.startButtonAction
         recentAppsLimit = try container.decodeIfPresent(Int.self, forKey: .recentAppsLimit) ?? defaults.recentAppsLimit
         startLogo = try container.decodeIfPresent(StartLogoPalette.self, forKey: .startLogo) ?? defaults.startLogo
+        tilingShortcutsEnabled = try container.decodeIfPresent(Bool.self, forKey: .tilingShortcutsEnabled)
+            ?? defaults.tilingShortcutsEnabled
+        tilingModifiers = try container.decodeIfPresent(TilingModifiers.self, forKey: .tilingModifiers)
+            ?? defaults.tilingModifiers
+        dragToTileEnabled = try container.decodeIfPresent(Bool.self, forKey: .dragToTileEnabled)
+            ?? defaults.dragToTileEnabled
     }
 }

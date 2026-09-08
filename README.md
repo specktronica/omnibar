@@ -72,7 +72,7 @@ The Xcode project is gitignored; `project.yml` is the source of truth.
 
 ## Permissions
 
-- **Accessibility** (required): list windows, raise / minimize / close / fullscreen, and read Dock badges.
+- **Accessibility** (required): list windows, raise / minimize / close / fullscreen, move and resize for tiling, and read Dock badges.
 - **Screen Recording** (optional): live hover thumbnails. Without it, the preview shows the app icon.
 
 macOS records permission grants against the app's code-signing requirement, on the copy Launch Services resolves for the bundle ID. "Quit & Reopen" after a Screen Recording grant relaunches that copy. `make run` signs with Developer ID Application when that identity is in the keychain so local builds match the Homebrew cask.
@@ -104,6 +104,7 @@ Signing, TCC, and tests are covered in [docs/development.md](docs/development.md
 - Spaces: show windows on the current Space (minimized windows stay on their last screen); hide the bar in fullscreen Spaces
 - Drag to reorder, group by application, icons-only mode
 - Multi-monitor: one bar per screen, main-display-only, hide per display
+- Window tiling: ⌃⌥← / ⌃⌥→ for halves and quarters (press again to cycle), drag a window to a screen edge or the top to snap; tiles stay above the bar
 - Auto-resize overlapping windows, fully hide Dock (moved to the top, including Mission Control, reverted on quit), auto-hide the bar
 
 See [docs/usage.md](docs/usage.md) for clicks, menus, and every Settings pane.
