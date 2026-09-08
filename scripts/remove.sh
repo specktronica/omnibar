@@ -167,9 +167,69 @@ unregister_registered_copies() {
   done < <(registered_omnibar_paths | awk 'NF && !seen[$0]++')
 }
 
+# tccutil looks up the bundle ID through Launch Services. An unregistered or
+# already-deleted copy yields "No such bundle identifier", or a silent no-op.
+# Prefer an installed copy, then the leftover repo build.
+tcc_app_candidate() {
+  local path
+  for path in \
+    "/Applications/Omnibar.app" \
+    "${HOME}/Applications/Omnibar.app" \
+    "$PWD/build/Omnibar.app"
+  do
+    if [[ -d "$path" ]]; then
+      printf '%s\n' "$path"
+      return 0
+    fi
+  done
+  if [[ -d "$XCODE_DERIVED" ]]; then
+    shopt -s nullglob
+    for path in "$XCODE_DERIVED"/Omnibar-*/Build/Products/*/Omnibar.app; do
+      shopt -u nullglob
+      printf '%s\n' "$path"
+      return 0
+    done
+    shopt -u nullglob
+  fi
+  return 1
+}
+
+reset_tcc() {
+  local candidate=""
+  local failed=0
+  candidate="$(tcc_app_candidate || true)"
+  if [[ -n "$candidate" && -x "$LSREGISTER" ]]; then
+    echo "Registering $candidate so TCC reset can resolve $BUNDLE_ID."
+    "$LSREGISTER" -f "$candidate" || true
+    sleep 0.5
+  else
+    echo "No Omnibar.app found to register; TCC reset may not take effect." >&2
+  fi
+
+  echo "Resetting TCC grants."
+  if tccutil reset All "$BUNDLE_ID"; then
+    return 0
+  fi
+  echo "tccutil reset All failed; trying Accessibility and ScreenCapture." >&2
+  if ! tccutil reset Accessibility "$BUNDLE_ID"; then
+    echo "Could not reset Accessibility for $BUNDLE_ID." >&2
+    failed=1
+  fi
+  if ! tccutil reset ScreenCapture "$BUNDLE_ID"; then
+    echo "Could not reset Screen Recording for $BUNDLE_ID." >&2
+    failed=1
+  fi
+  if (( failed )); then
+    echo "TCC grants may still be active. After registering a copy, run:" >&2
+    echo "  tccutil reset Accessibility $BUNDLE_ID" >&2
+    echo "  tccutil reset ScreenCapture $BUNDLE_ID" >&2
+  fi
+}
+
 quit_omnibar
 restore_dock
 remove_login_item
+reset_tcc
 
 # Unregister before brew deletes the files so Launch Services does not keep a
 # stale /Applications/Omnibar.app entry for the bundle ID.
@@ -209,13 +269,6 @@ rm -rf \
   "${HOME}/Library/Containers/${BUNDLE_ID}" \
   "${HOME}/Library/Logs/Omnibar"
 rm -f "${HOME}/Library/Preferences/ByHost/${BUNDLE_ID}".*.plist 2>/dev/null || true
-
-echo "Resetting TCC grants."
-tccutil reset All "$BUNDLE_ID" 2>/dev/null \
-  || {
-    tccutil reset Accessibility "$BUNDLE_ID" 2>/dev/null || true
-    tccutil reset ScreenCapture "$BUNDLE_ID" 2>/dev/null || true
-  }
 
 if command -v brew >/dev/null 2>&1 && brew tap | grep -qx "$TAP"; then
   echo "Untapping $TAP."
