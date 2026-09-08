@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # Completely uninstall Omnibar: running process, Applications copies, Homebrew
-# cask and tap, login item, Dock backup, preferences, TCC grants, and caches.
+# cask and tap, Xcode DerivedData products, login item, Dock backup,
+# preferences, TCC grants, and caches.
 #
 #   make remove
 #
-# Does not delete repo build products (build/Omnibar.app, DerivedData).
+# Does not delete repo build products (build/Omnibar.app, build/DerivedData).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -12,6 +13,7 @@ BUNDLE_ID="io.specktronica.omnibar"
 CASK="omnibar"
 TAP="specktronica/omnibar"
 LSREGISTER="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
+XCODE_DERIVED="${HOME}/Library/Developer/Xcode/DerivedData"
 
 echo "Removing Omnibar."
 
@@ -111,6 +113,60 @@ remove_app() {
   fi
 }
 
+# Xcode IDE builds land in ~/Library/Developer/Xcode/DerivedData, not the
+# repo's build/DerivedData. Launch Services often prefers that copy, so
+# Accessibility and Screen Recording bind to it instead of build/Omnibar.app.
+remove_xcode_derived_apps() {
+  local app
+  [[ -d "$XCODE_DERIVED" ]] || return 0
+  shopt -s nullglob
+  for app in "$XCODE_DERIVED"/Omnibar-*/Build/Products/*/Omnibar.app; do
+    remove_app "$app"
+  done
+  shopt -u nullglob
+}
+
+# Every Launch Services record for this bundle ID, including stale temp and
+# Trash paths. path: comes before identifier: in each dump record.
+registered_omnibar_paths() {
+  [[ -x "$LSREGISTER" ]] || return 0
+  "$LSREGISTER" -dump 2>/dev/null | awk -v bid="$BUNDLE_ID" '
+    /^-+$/ {
+      if (want && path != "") print path
+      path = ""
+      want = 0
+      next
+    }
+    /^path:[[:space:]]+/ {
+      line = $0
+      sub(/^path:[[:space:]]+/, "", line)
+      sub(/ \([^)]+\)$/, "", line)
+      path = line
+      next
+    }
+    /^identifier:[[:space:]]+/ {
+      want = ($2 == bid)
+      next
+    }
+    END {
+      if (want && path != "") print path
+    }
+  ' || true
+}
+
+unregister_registered_copies() {
+  local path
+  local any=0
+  while IFS= read -r path; do
+    [[ -n "$path" ]] || continue
+    if (( !any )); then
+      echo "Unregistering Launch Services copies."
+      any=1
+    fi
+    unregister_app "$path"
+  done < <(registered_omnibar_paths | awk 'NF && !seen[$0]++')
+}
+
 quit_omnibar
 restore_dock
 remove_login_item
@@ -136,6 +192,8 @@ fi
 
 remove_app "/Applications/Omnibar.app"
 remove_app "${HOME}/Applications/Omnibar.app"
+remove_xcode_derived_apps
+unregister_registered_copies
 
 echo "Deleting preferences and caches."
 defaults delete "$BUNDLE_ID" 2>/dev/null || true
@@ -168,4 +226,4 @@ if command -v sfltool >/dev/null 2>&1 && sfltool dumpbtm 2>/dev/null | grep -q "
   echo "A leftover Login Item may still appear in System Settings → General → Login Items. Disable it there."
 fi
 
-echo "Omnibar removed. Repo build products were left in place."
+echo "Omnibar removed. Repo build products (build/Omnibar.app, build/DerivedData) were left in place."

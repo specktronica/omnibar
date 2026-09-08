@@ -38,7 +38,7 @@ make run
 
 `make run` kills an existing `Omnibar` process, then `open`s `build/Omnibar.app`.
 
-`make remove` (`scripts/remove.sh`) uninstalls installed copies. It quits a running Omnibar (Apple Event, then SIGTERM/SIGKILL), restores Dock settings from `omnibar.dock.backup.v1` when that key exists, or from the fully-hidden signature (`autohide-delay` 1000 and orientation `top`), deletes the System Events login item named Omnibar, runs `brew uninstall --cask --zap omnibar` when the cask is installed, deletes `/Applications/Omnibar.app` and `~/Applications/Omnibar.app`, deletes the `io.specktronica.omnibar` defaults domain and related Library caches, runs `tccutil reset All io.specktronica.omnibar`, and untaps `specktronica/omnibar`. It does not delete `build/Omnibar.app` or DerivedData.
+`make remove` (`scripts/remove.sh`) uninstalls installed copies. It quits a running Omnibar (Apple Event, then SIGTERM/SIGKILL), restores Dock settings from `omnibar.dock.backup.v1` when that key exists, or from the fully-hidden signature (`autohide-delay` 1000 and orientation `top`), deletes the System Events login item named Omnibar, runs `brew uninstall --cask --zap omnibar` when the cask is installed, deletes `/Applications/Omnibar.app` and `~/Applications/Omnibar.app`, deletes Xcode DerivedData `Omnibar.app` products (`~/Library/Developer/Xcode/DerivedData/Omnibar-*/Build/Products/*/Omnibar.app`), unregisters remaining Launch Services records for `io.specktronica.omnibar`, deletes the `io.specktronica.omnibar` defaults domain and related Library caches, runs `tccutil reset All io.specktronica.omnibar`, and untaps `specktronica/omnibar`. It does not delete `build/Omnibar.app` or `build/DerivedData`.
 
 Derived data for script builds lives in `build/DerivedData`. The copied app is `build/Omnibar.app`.
 
@@ -55,7 +55,7 @@ The scheme is `Omnibar`; tests are attached as `OmnibarTests`.
 
 `project.yml` requests the "Apple Development" identity and Hardened Runtime for Xcode IDE builds. `scripts/build.sh` prefers `CODESIGN_IDENTITY` if set, then Developer ID Application, then Apple Development, then ad-hoc. Developer ID makes `make run` share the same designated requirement as the Homebrew cask.
 
-After `xcodebuild`, the script copies the `.app` to `build/Omnibar.app`, unregisters DerivedData products from Launch Services, `codesign`s with `Omnibar/Resources/Omnibar.entitlements`, `--options runtime`, and `--timestamp=none`, then registers `build/Omnibar.app`.
+After `xcodebuild`, the script copies the `.app` to `build/Omnibar.app`, unregisters repo and Xcode DerivedData products from Launch Services, `codesign`s with `Omnibar/Resources/Omnibar.entitlements`, `--options runtime`, and `--timestamp=none`, then registers `build/Omnibar.app`.
 
 ## Release zip
 

@@ -2,9 +2,25 @@
 
 Windows-style taskbar for macOS. One bar per display, per-window switching, hover thumbnails, pinning, Spaces support, and a Start Menu.
 
+![Omnibar taskbar with Start button and running app tiles](assets/media/omnibar.png)
+
 It runs as a menu-bar accessory (`LSUIElement`): there is no Dock icon except during first-run onboarding. Open **Settings…** from the menu extra, or click the app again after it is already running.
 
 Minimum macOS: 14. Built with Swift 6 and AppKit.
+
+## Demo
+
+Hover a tile for window thumbnails (live captures need Screen Recording). Click a card to switch.
+
+![Hover thumbnails for two Chrome windows](assets/media/screens.png)
+
+Start Menu — search, A–Z apps, pinned grid, and recents:
+
+![Opening the Start Menu from the taskbar](assets/media/menu_open.gif)
+
+Switch windows from the thumbnail popover:
+
+![Switching Chrome windows from hover thumbnails](assets/media/screen_switch.gif)
 
 ## Install
 
@@ -20,7 +36,7 @@ After install, grant **Accessibility** in System Settings. **Screen Recording** 
 make remove
 ```
 
-Quits Omnibar, restores the Dock if Omnibar had fully hidden it, deletes `/Applications/Omnibar.app` and `~/Applications/Omnibar.app`, uninstalls the Homebrew cask, untaps `specktronica/omnibar`, removes preferences and caches, resets Accessibility and Screen Recording grants, and deletes the login item. Repo build products (`build/Omnibar.app`) are left in place.
+Quits Omnibar, restores the Dock if Omnibar had fully hidden it, deletes `/Applications/Omnibar.app`, `~/Applications/Omnibar.app`, and Xcode DerivedData `Omnibar.app` products, uninstalls the Homebrew cask, untaps `specktronica/omnibar`, unregisters leftover Launch Services copies, removes preferences and caches, resets Accessibility and Screen Recording grants, and deletes the login item. Repo build products (`build/Omnibar.app`, `build/DerivedData`) are left in place.
 
 ## Build
 
@@ -38,7 +54,7 @@ make run      # build, kill a running Omnibar, open build/Omnibar.app
 make release  # Developer ID sign, notarize, staple, zip to build/Omnibar-<version>.zip
 make publish      # GitHub Release + Homebrew tap (needs the zip from make release)
 make brew-install # install or upgrade the Homebrew cask
-make remove       # uninstall Applications copies, Homebrew cask/tap, prefs, TCC, login item
+make remove       # uninstall Applications copies, Xcode DerivedData products, Homebrew cask/tap, prefs, TCC, login item
 ```
 
 Or open the generated project:

@@ -27,6 +27,6 @@ brew-install:
 	  brew install --cask specktronica/omnibar/omnibar; \
 	fi
 
-# Quit, restore Dock, remove Applications copies, Homebrew cask/tap, prefs, TCC.
+# Quit, restore Dock, remove Applications copies, Xcode DerivedData products, Homebrew cask/tap, prefs, TCC.
 remove:
 	./scripts/remove.sh

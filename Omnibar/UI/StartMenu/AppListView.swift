@@ -8,6 +8,12 @@ final class AppListView: NSScrollView {
     private var rows: [AppRow] = []
     private var contentHeight: CGFloat = 1
     private var renderedIDs: [String] = []
+    private var hoveredRow: AppRow?
+    private var listTracking: NSTrackingArea?
+
+    var highlightedAppNames: [String] {
+        rows.filter(\.isHovered).map(\.appName)
+    }
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -18,9 +24,20 @@ final class AppListView: NSScrollView {
         hasHorizontalScroller = false
         autohidesScrollers = true
         documentView = document
+        contentView.postsBoundsChangedNotifications = true
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(clipViewBoundsDidChange),
+            name: NSView.boundsDidChangeNotification,
+            object: contentView
+        )
     }
 
     required init?(coder: NSCoder) { nil }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
 
     func update(_ groups: [(letter: String, apps: [AppCatalog.CatalogApp])]) {
         let ids = groups.flatMap { group in
@@ -28,6 +45,7 @@ final class AppListView: NSScrollView {
         }
         if ids == renderedIDs {
             contentView.scroll(to: .zero)
+            updateHoverFromMouse()
             return
         }
         renderedIDs = ids
@@ -84,16 +102,22 @@ final class AppListView: NSScrollView {
         }
         if rowIndex < rows.count {
             for extra in rows[rowIndex...] {
+                extra.setHovered(false)
                 extra.removeFromSuperview()
             }
         }
         headers = nextHeaders
         rows = nextRows
+        if let hoveredRow, !rows.contains(where: { $0 === hoveredRow }) {
+            hoveredRow.setHovered(false)
+            self.hoveredRow = nil
+        }
         contentHeight = max(y, 1)
         document.frame = NSRect(x: 0, y: 0, width: width, height: contentHeight)
         contentView.scroll(to: .zero)
         reflectScrolledClipView(contentView)
         needsLayout = true
+        updateHoverFromMouse()
     }
 
     override func layout() {
@@ -111,6 +135,89 @@ final class AppListView: NSScrollView {
         }
         document.frame = NSRect(x: 0, y: 0, width: width, height: contentHeight)
     }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        updateHoverFromMouse()
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let listTracking {
+            removeTrackingArea(listTracking)
+        }
+        let area = NSTrackingArea(
+            rect: bounds,
+            options: [.mouseEnteredAndExited, .mouseMoved, .activeAlways, .inVisibleRect],
+            owner: self,
+            userInfo: nil
+        )
+        listTracking = area
+        addTrackingArea(area)
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        updateHover(from: event)
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        updateHover(from: event)
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        // Recompute instead of blindly clearing: AppKit can emit a spurious
+        // exit when scrolling rebuilds the tracking area while the cursor is
+        // still inside the list.
+        updateHoverFromMouse()
+    }
+
+    override func reflectScrolledClipView(_ clipView: NSClipView) {
+        super.reflectScrolledClipView(clipView)
+        updateHoverFromMouse()
+    }
+
+    @objc private func clipViewBoundsDidChange() {
+        updateHoverFromMouse()
+    }
+
+    func documentPoint(forAppName name: String) -> NSPoint? {
+        rows.first { $0.appName == name }.map { NSPoint(x: $0.frame.midX, y: $0.frame.midY) }
+    }
+
+    func updateHoverFromMouse() {
+        guard let window else {
+            syncHover(atDocumentPoint: nil)
+            return
+        }
+        applyHover(atWindowPoint: window.mouseLocationOutsideOfEventStream)
+    }
+
+    func syncHover(atDocumentPoint point: NSPoint?) {
+        let row = point.flatMap { location in
+            rows.first { $0.frame.contains(location) }
+        }
+        setHoveredRow(row)
+    }
+
+    private func updateHover(from event: NSEvent) {
+        applyHover(atWindowPoint: event.locationInWindow)
+    }
+
+    private func applyHover(atWindowPoint mouseInWindow: NSPoint) {
+        let local = convert(mouseInWindow, from: nil)
+        guard visibleRect.contains(local) else {
+            syncHover(atDocumentPoint: nil)
+            return
+        }
+        syncHover(atDocumentPoint: document.convert(mouseInWindow, from: nil))
+    }
+
+    private func setHoveredRow(_ row: AppRow?) {
+        guard hoveredRow !== row else { return }
+        hoveredRow?.setHovered(false)
+        hoveredRow = row
+        hoveredRow?.setHovered(true)
+    }
 }
 
 private final class FlippedView: NSView {
@@ -122,6 +229,9 @@ private final class AppRow: NSView {
     private var app: AppCatalog.CatalogApp
     private let icon = NSImageView()
     private let label = NSTextField(labelWithString: "")
+    private(set) var isHovered = false
+
+    var appName: String { app.name }
 
     init(app: AppCatalog.CatalogApp) {
         self.app = app
@@ -152,6 +262,14 @@ private final class AppRow: NSView {
         label.stringValue = app.name
     }
 
+    func setHovered(_ hovered: Bool) {
+        guard isHovered != hovered else { return }
+        isHovered = hovered
+        layer?.backgroundColor = hovered
+            ? NSColor.labelColor.withAlphaComponent(0.08).cgColor
+            : nil
+    }
+
     override func layout() {
         super.layout()
         icon.frame = NSRect(x: 6, y: 4, width: 20, height: 20)
@@ -159,25 +277,6 @@ private final class AppRow: NSView {
     }
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
-
-    override func updateTrackingAreas() {
-        super.updateTrackingAreas()
-        trackingAreas.forEach(removeTrackingArea)
-        addTrackingArea(NSTrackingArea(
-            rect: bounds,
-            options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
-            owner: self,
-            userInfo: nil
-        ))
-    }
-
-    override func mouseEntered(with event: NSEvent) {
-        layer?.backgroundColor = NSColor.labelColor.withAlphaComponent(0.08).cgColor
-    }
-
-    override func mouseExited(with event: NSEvent) {
-        layer?.backgroundColor = nil
-    }
 
     override func mouseDown(with event: NSEvent) {}
 

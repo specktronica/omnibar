@@ -118,7 +118,7 @@ final class TaskbarPanel: NSPanel {
         becomesKeyOnlyIfNeeded = true
         collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle, .fullScreenNone]
         level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.popUpMenuWindow)) - 1)
-        sharingType = .none
+        sharingType = .readOnly
         animationBehavior = .utilityWindow
         ignoresMouseEvents = false
     }

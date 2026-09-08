@@ -704,6 +704,50 @@ final class AppListViewTests: XCTestCase {
         )
         XCTAssertEqual(view.documentView?.subviews.count, 4)
     }
+
+    @MainActor
+    func testHoverHighlightsOnlyTheRowUnderThePoint() {
+        let view = AppListView(frame: NSRect(x: 0, y: 0, width: 300, height: 80))
+        let apps = [
+            AppCatalog.CatalogApp(bundleID: "a", name: "Arcade", url: URL(fileURLWithPath: "/tmp/Arcade.app")),
+            AppCatalog.CatalogApp(bundleID: "b", name: "Books", url: URL(fileURLWithPath: "/tmp/Books.app")),
+            AppCatalog.CatalogApp(bundleID: "c", name: "Chess", url: URL(fileURLWithPath: "/tmp/Chess.app")),
+            AppCatalog.CatalogApp(bundleID: "d", name: "Dictionary", url: URL(fileURLWithPath: "/tmp/Dictionary.app")),
+            AppCatalog.CatalogApp(bundleID: "t", name: "Tips", url: URL(fileURLWithPath: "/tmp/Tips.app"))
+        ]
+        view.update(AppCatalog.shared.groupedByLetter(apps))
+        view.layoutSubtreeIfNeeded()
+
+        for name in ["Arcade", "Books", "Chess", "Dictionary", "Tips"] {
+            let point = view.documentPoint(forAppName: name)
+            XCTAssertNotNil(point, name)
+            view.syncHover(atDocumentPoint: point)
+            XCTAssertEqual(view.highlightedAppNames, [name])
+        }
+
+        view.syncHover(atDocumentPoint: NSPoint(x: 10, y: 8))
+        XCTAssertEqual(view.highlightedAppNames, [])
+
+        view.syncHover(atDocumentPoint: view.documentPoint(forAppName: "Chess"))
+        XCTAssertEqual(view.highlightedAppNames, ["Chess"])
+        view.syncHover(atDocumentPoint: nil)
+        XCTAssertEqual(view.highlightedAppNames, [])
+    }
+
+    @MainActor
+    func testHoverClearsWhenMouseCannotBeResolved() {
+        let view = AppListView(frame: NSRect(x: 0, y: 0, width: 300, height: 80))
+        let apps = [
+            AppCatalog.CatalogApp(bundleID: "a", name: "Arcade", url: URL(fileURLWithPath: "/tmp/Arcade.app")),
+            AppCatalog.CatalogApp(bundleID: "b", name: "Books", url: URL(fileURLWithPath: "/tmp/Books.app"))
+        ]
+        view.update(AppCatalog.shared.groupedByLetter(apps))
+        view.layoutSubtreeIfNeeded()
+        view.syncHover(atDocumentPoint: view.documentPoint(forAppName: "Books"))
+        XCTAssertEqual(view.highlightedAppNames, ["Books"])
+        view.updateHoverFromMouse()
+        XCTAssertEqual(view.highlightedAppNames, [])
+    }
 }
 
 final class TaskbarSnapshotUITests: XCTestCase {

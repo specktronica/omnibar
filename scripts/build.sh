@@ -118,12 +118,16 @@ rm -rf build/Omnibar.app
 ditto "$APP_SRC" build/Omnibar.app
 
 # xcodebuild registers DerivedData products with Launch Services, including
-# Debug leftovers from tests. Unregister those copies before signing so
-# "Quit & Reopen" relaunches build/Omnibar.app.
+# Debug leftovers from tests and Xcode IDE builds under
+# ~/Library/Developer/Xcode/DerivedData. Unregister those copies before
+# signing so "Quit & Reopen" relaunches build/Omnibar.app.
 LSREGISTER="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
 if [[ -x "$LSREGISTER" ]]; then
   shopt -s nullglob
-  for product in "$DERIVED/Build/Products"/*/Omnibar.app; do
+  for product in \
+    "$DERIVED/Build/Products"/*/Omnibar.app \
+    "${HOME}/Library/Developer/Xcode/DerivedData"/Omnibar-*/Build/Products/*/Omnibar.app
+  do
     "$LSREGISTER" -u "$product" 2>/dev/null || true
   done
   shopt -u nullglob
