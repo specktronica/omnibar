@@ -20,8 +20,7 @@ final class AppSettingsDecodeTests: XCTestCase {
             "autoHide",
             "showTabsAsItems",
             "tilingShortcutsEnabled",
-            "tilingModifiers",
-            "dragToTileEnabled"
+            "tilingModifiers"
         ] {
             object.removeValue(forKey: key)
         }
@@ -40,8 +39,6 @@ final class AppSettingsDecodeTests: XCTestCase {
         XCTAssertTrue(decoded.tilingShortcutsEnabled)
         XCTAssertEqual(decoded.tilingModifiers, AppSettings.default.tilingModifiers)
         XCTAssertEqual(decoded.tilingModifiers, .controlOption)
-        XCTAssertEqual(decoded.dragToTileEnabled, AppSettings.default.dragToTileEnabled)
-        XCTAssertTrue(decoded.dragToTileEnabled)
         XCTAssertEqual(decoded.transparency, 0.33)
         XCTAssertEqual(decoded.startButtonAction, .launchpad)
     }
@@ -50,10 +47,8 @@ final class AppSettingsDecodeTests: XCTestCase {
     func testTilingModifiersPersistAndUnknownValueFailsDecode() throws {
         var settings = AppSettings.default
         settings.tilingModifiers = .controlCommand
-        settings.dragToTileEnabled = false
         let decoded = try JSONDecoder().decode(AppSettings.self, from: try JSONEncoder().encode(settings))
         XCTAssertEqual(decoded.tilingModifiers, .controlCommand)
-        XCTAssertFalse(decoded.dragToTileEnabled)
 
         var object = try XCTUnwrap(
             JSONSerialization.jsonObject(with: try JSONEncoder().encode(AppSettings.default)) as? [String: Any]

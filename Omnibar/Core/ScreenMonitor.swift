@@ -60,11 +60,6 @@ final class ScreenMonitor {
         return !panel.isSuppressed
     }
 
-    /// True when the point is over any bar, Start Menu, or thumbnail popover.
-    func ownsCursor(_ point: NSPoint) -> Bool {
-        panels.values.contains { !$0.isSuppressed && $0.ownsCursor(point) }
-    }
-
     func rebuild(recreate: Bool = false) {
         if recreate {
             panels.values.forEach { $0.close() }

@@ -57,6 +57,7 @@ final class TilingGeometryTests: XCTestCase {
     func testTileFramesPartitionUsableArea() {
         XCTAssertEqual(Tile.leftHalf.frame(in: usable), CGRect(x: 0, y: 50, width: 800, height: 825))
         XCTAssertEqual(Tile.rightHalf.frame(in: usable), CGRect(x: 800, y: 50, width: 800, height: 825))
+        XCTAssertEqual(Tile.topHalf.frame(in: usable), CGRect(x: 0, y: 462, width: 1600, height: 413))
         XCTAssertEqual(Tile.bottomLeft.frame(in: usable), CGRect(x: 0, y: 50, width: 800, height: 412))
         XCTAssertEqual(Tile.topLeft.frame(in: usable), CGRect(x: 0, y: 462, width: 800, height: 413))
         XCTAssertEqual(Tile.bottomRight.frame(in: usable), CGRect(x: 800, y: 50, width: 800, height: 412))
@@ -74,6 +75,10 @@ final class TilingGeometryTests: XCTestCase {
         let top = Tile.topLeft.frame(in: odd)
         XCTAssertEqual(bottom.maxY, top.minY)
         XCTAssertEqual(bottom.height + top.height, odd.height)
+        let topHalf = Tile.topHalf.frame(in: odd)
+        XCTAssertEqual(topHalf.maxY, odd.maxY)
+        XCTAssertEqual(topHalf.height, odd.height - floor(odd.height / 2))
+        XCTAssertEqual(topHalf.width, odd.width)
     }
 
     // MARK: Keyboard cycle
@@ -88,6 +93,10 @@ final class TilingGeometryTests: XCTestCase {
             TilingGeometry.nextTile(direction: .left, currentFrame: floating, usable: usable, remembered: nil),
             .leftHalf
         )
+        XCTAssertEqual(
+            TilingGeometry.nextTile(direction: .up, currentFrame: floating, usable: usable, remembered: nil),
+            .topHalf
+        )
     }
 
     func testRepeatedPressesCycleAndWrap() {
@@ -100,6 +109,15 @@ final class TilingGeometryTests: XCTestCase {
         frame = tile.frame(in: usable)
         tile = TilingGeometry.nextTile(direction: .right, currentFrame: frame, usable: usable, remembered: nil)
         XCTAssertEqual(tile, .rightHalf)
+    }
+
+    func testRepeatedUpPressesCycleTopHalfAndMaximize() {
+        var frame = Tile.topHalf.frame(in: usable)
+        var tile = TilingGeometry.nextTile(direction: .up, currentFrame: frame, usable: usable, remembered: nil)
+        XCTAssertEqual(tile, .maximize)
+        frame = tile.frame(in: usable)
+        tile = TilingGeometry.nextTile(direction: .up, currentFrame: frame, usable: usable, remembered: nil)
+        XCTAssertEqual(tile, .topHalf)
     }
 
     func testFrameMatchToleratesSmallOffsets() {
@@ -123,6 +141,20 @@ final class TilingGeometryTests: XCTestCase {
         XCTAssertEqual(
             TilingGeometry.nextTile(direction: .left, currentFrame: frame, usable: usable, remembered: remembered),
             .leftHalf
+        )
+        XCTAssertEqual(
+            TilingGeometry.nextTile(direction: .up, currentFrame: frame, usable: usable, remembered: remembered),
+            .topHalf
+        )
+        let topHalf = Tile.topHalf.frame(in: usable)
+        let upRemembered = AppliedTile(tile: .topHalf, frame: topHalf)
+        XCTAssertEqual(
+            TilingGeometry.nextTile(direction: .left, currentFrame: topHalf, usable: usable, remembered: upRemembered),
+            .leftHalf
+        )
+        XCTAssertEqual(
+            TilingGeometry.nextTile(direction: .right, currentFrame: topHalf, usable: usable, remembered: upRemembered),
+            .rightHalf
         )
     }
 
@@ -153,6 +185,19 @@ final class TilingGeometryTests: XCTestCase {
             TilingGeometry.nextTile(direction: .right, currentFrame: frame, usable: usable, remembered: remembered),
             .rightHalf
         )
+        XCTAssertEqual(
+            TilingGeometry.nextTile(direction: .up, currentFrame: frame, usable: usable, remembered: remembered),
+            .topHalf
+        )
+    }
+
+    func testRememberedTopHalfAdvancesToMaximizeWhenClamped() {
+        let clamped = CGRect(x: 0, y: 400, width: 1600, height: 475)
+        let remembered = AppliedTile(tile: .topHalf, frame: clamped)
+        XCTAssertEqual(
+            TilingGeometry.nextTile(direction: .up, currentFrame: clamped, usable: usable, remembered: remembered),
+            .maximize
+        )
     }
 
     // MARK: Coordinate conversion
@@ -172,84 +217,6 @@ final class TilingGeometryTests: XCTestCase {
         let cg = TilingGeometry.cgRect(fromCocoaRect: cocoa, primaryHeight: primaryHeight)
         XCTAssertEqual(cg, CGRect(x: -1200, y: 400, width: 1200, height: 800))
         XCTAssertEqual(ScreenGeometry.cocoaRect(fromCGRect: cg, primaryHeight: primaryHeight), cocoa)
-    }
-
-    // MARK: Snap zones
-
-    private func zone(_ x: CGFloat, _ y: CGFloat, shared: Set<ScreenEdge> = []) -> Tile? {
-        TilingGeometry.snapZone(cursor: CGPoint(x: x, y: y), screenFrame: screen, sharedEdges: shared)
-    }
-
-    func testSideEdgesSnapToHalves() {
-        XCTAssertEqual(zone(0, 450), .leftHalf)
-        XCTAssertEqual(zone(5, 450), .leftHalf)
-        XCTAssertEqual(zone(1599, 450), .rightHalf)
-    }
-
-    func testSideEdgeCornersSnapToQuarters() {
-        // Corner band is 20% of 900 = 180 pt.
-        XCTAssertEqual(zone(0, 899), .topLeft)
-        XCTAssertEqual(zone(0, 721), .topLeft)
-        XCTAssertEqual(zone(0, 719), .leftHalf)
-        XCTAssertEqual(zone(0, 0), .bottomLeft)
-        XCTAssertEqual(zone(0, 179), .bottomLeft)
-        XCTAssertEqual(zone(0, 181), .leftHalf)
-        XCTAssertEqual(zone(1599, 899), .topRight)
-        XCTAssertEqual(zone(1599, 10), .bottomRight)
-    }
-
-    func testTopEdgeMaximizes() {
-        XCTAssertEqual(zone(800, 899), .maximize)
-        XCTAssertEqual(zone(800, 895), .maximize)
-    }
-
-    func testCenterAndBottomEdgeDoNotSnap() {
-        XCTAssertNil(zone(800, 450))
-        XCTAssertNil(zone(800, 0))
-        XCTAssertNil(zone(800, 5))
-        XCTAssertNil(zone(10, 450))
-    }
-
-    func testSharedEdgesAreIgnored() {
-        XCTAssertNil(zone(1599, 450, shared: [.right]))
-        XCTAssertNil(zone(1599, 50, shared: [.right]))
-        XCTAssertEqual(zone(0, 450, shared: [.right]), .leftHalf)
-        XCTAssertNil(zone(0, 450, shared: [.left]))
-        XCTAssertNil(zone(800, 899, shared: [.top]))
-    }
-
-    func testSnapZoneUsesScreenOriginNotZero() {
-        let secondary = CGRect(x: 1600, y: -200, width: 1200, height: 800)
-        XCTAssertEqual(
-            TilingGeometry.snapZone(cursor: CGPoint(x: 1600, y: 200), screenFrame: secondary, sharedEdges: []),
-            .leftHalf
-        )
-        XCTAssertEqual(
-            TilingGeometry.snapZone(cursor: CGPoint(x: 2200, y: 599), screenFrame: secondary, sharedEdges: []),
-            .maximize
-        )
-        XCTAssertNil(
-            TilingGeometry.snapZone(cursor: CGPoint(x: 2200, y: -200), screenFrame: secondary, sharedEdges: [])
-        )
-    }
-
-    // MARK: Shared edges
-
-    func testSharedEdgesDetectsAdjacentScreens() {
-        let right = CGRect(x: 1600, y: 100, width: 1200, height: 800)
-        let above = CGRect(x: 200, y: 900, width: 1000, height: 600)
-        let edges = TilingGeometry.sharedEdges(of: screen, others: [right, above])
-        XCTAssertEqual(edges, [.right, .top])
-        XCTAssertEqual(TilingGeometry.sharedEdges(of: right, others: [screen, above]), [.left])
-        XCTAssertEqual(TilingGeometry.sharedEdges(of: above, others: [screen, right]), [.bottom])
-    }
-
-    func testSharedEdgesRequireOverlapAlongTheEdge() {
-        // Same x boundary but no vertical overlap: not adjacent.
-        let diagonal = CGRect(x: 1600, y: 900, width: 1200, height: 800)
-        XCTAssertEqual(TilingGeometry.sharedEdges(of: screen, others: [diagonal]), [])
-        XCTAssertEqual(TilingGeometry.sharedEdges(of: screen, others: []), [])
-        XCTAssertEqual(TilingGeometry.sharedEdges(of: screen, others: [screen]), [])
     }
 
     // MARK: Modifiers

@@ -104,7 +104,7 @@ Signing, TCC, and tests are covered in [docs/development.md](docs/development.md
 - Spaces: show windows on the current Space (minimized windows stay on their last screen); hide the bar in fullscreen Spaces
 - Drag to reorder, group by application, icons-only mode
 - Multi-monitor: one bar per screen, main-display-only, hide per display
-- Window tiling: ⌃⌥← / ⌃⌥→ for halves and quarters (press again to cycle), drag a window to a screen edge or the top to snap; tiles stay above the bar
+- Window tiling: ⌃⌥← / ⌃⌥→ for halves and quarters, ⌃⌥↑ for top half then maximize (press again to cycle); tiles stay above the bar
 - Auto-resize overlapping windows, fully hide Dock (moved to the top, including Mission Control, reverted on quit), auto-hide the bar
 
 See [docs/usage.md](docs/usage.md) for clicks, menus, and every Settings pane.

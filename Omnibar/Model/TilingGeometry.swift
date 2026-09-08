@@ -5,6 +5,7 @@ import Foundation
 nonisolated enum Tile: String, Codable, CaseIterable, Sendable {
     case leftHalf
     case rightHalf
+    case topHalf
     case topLeft
     case topRight
     case bottomLeft
@@ -26,6 +27,8 @@ nonisolated enum Tile: String, Codable, CaseIterable, Sendable {
             return CGRect(x: usable.minX, y: usable.minY, width: halfWidth, height: usable.height)
         case .rightHalf:
             return CGRect(x: rightX, y: usable.minY, width: rightWidth, height: usable.height)
+        case .topHalf:
+            return CGRect(x: usable.minX, y: topY, width: usable.width, height: topHeight)
         case .topLeft:
             return CGRect(x: usable.minX, y: topY, width: halfWidth, height: topHeight)
         case .topRight:
@@ -44,11 +47,13 @@ nonisolated enum Tile: String, Codable, CaseIterable, Sendable {
 nonisolated enum TileDirection: Sendable {
     case left
     case right
+    case up
 
     var sequence: [Tile] {
         switch self {
         case .left: [.leftHalf, .topLeft, .bottomLeft]
         case .right: [.rightHalf, .topRight, .bottomRight]
+        case .up: [.topHalf, .maximize]
         }
     }
 }
@@ -95,7 +100,7 @@ nonisolated enum TilingModifiers: String, Codable, CaseIterable, Identifiable, S
         }
     }
 
-    /// Control alone collides with Mission Control's Space-switching shortcuts.
+    /// Control alone collides with Mission Control (⌃↑) and Space-switching (⌃← / ⌃→).
     var conflictsWithMissionControl: Bool { self == .control }
 }
 
@@ -107,22 +112,10 @@ nonisolated struct AppliedTile: Equatable, Sendable {
     var frame: CGRect
 }
 
-nonisolated enum ScreenEdge: Hashable, Sendable {
-    case left
-    case right
-    case top
-    case bottom
-}
-
 nonisolated enum TilingGeometry {
     /// Distance from the tile frame, per edge, within which a window still
     /// counts as sitting on that tile.
     static let frameTolerance: CGFloat = 8
-    /// Cursor distance from a screen edge that counts as touching it.
-    static let edgeInset: CGFloat = 6
-    /// Portion of the screen height, at the top and bottom of a side edge,
-    /// that snaps to a quarter instead of a half.
-    static let cornerFraction: CGFloat = 0.2
 
     /// Area available for tiles. Starts from `visibleFrame` (excludes the menu
     /// bar and a visible Dock) and raises the bottom edge above the Taskbar when
@@ -175,61 +168,6 @@ nonisolated enum TilingGeometry {
             && abs(lhs.minY - rhs.minY) <= tolerance
             && abs(lhs.maxX - rhs.maxX) <= tolerance
             && abs(lhs.maxY - rhs.maxY) <= tolerance
-    }
-
-    /// Tile for a cursor position during a window drag. `screenFrame` and
-    /// `cursor` are in the same coordinate space with y increasing upward
-    /// (Cocoa). Edges in `sharedEdges` never snap so the cursor can cross to
-    /// the adjacent display. The bottom edge alone never snaps; that is where
-    /// the Taskbar sits.
-    static func snapZone(
-        cursor: CGPoint,
-        screenFrame: CGRect,
-        sharedEdges: Set<ScreenEdge>,
-        edgeInset: CGFloat = edgeInset,
-        cornerFraction: CGFloat = cornerFraction
-    ) -> Tile? {
-        let atLeft = cursor.x <= screenFrame.minX + edgeInset && !sharedEdges.contains(.left)
-        let atRight = cursor.x >= screenFrame.maxX - edgeInset && !sharedEdges.contains(.right)
-        let atTop = cursor.y >= screenFrame.maxY - edgeInset && !sharedEdges.contains(.top)
-        let cornerHeight = screenFrame.height * cornerFraction
-        let inTopBand = cursor.y >= screenFrame.maxY - cornerHeight
-        let inBottomBand = cursor.y <= screenFrame.minY + cornerHeight
-
-        if atLeft {
-            if inTopBand { return .topLeft }
-            if inBottomBand { return .bottomLeft }
-            return .leftHalf
-        }
-        if atRight {
-            if inTopBand { return .topRight }
-            if inBottomBand { return .bottomRight }
-            return .rightHalf
-        }
-        if atTop {
-            return .maximize
-        }
-        return nil
-    }
-
-    /// Edges of `frame` that touch another screen. Two frames share an edge
-    /// when the edge coordinates coincide within one point and the frames
-    /// overlap along that edge.
-    static func sharedEdges(of frame: CGRect, others: [CGRect]) -> Set<ScreenEdge> {
-        var edges: Set<ScreenEdge> = []
-        for other in others where other != frame {
-            let verticalOverlap = other.minY < frame.maxY && other.maxY > frame.minY
-            let horizontalOverlap = other.minX < frame.maxX && other.maxX > frame.minX
-            if verticalOverlap {
-                if abs(other.minX - frame.maxX) <= 1 { edges.insert(.right) }
-                if abs(other.maxX - frame.minX) <= 1 { edges.insert(.left) }
-            }
-            if horizontalOverlap {
-                if abs(other.minY - frame.maxY) <= 1 { edges.insert(.top) }
-                if abs(other.maxY - frame.minY) <= 1 { edges.insert(.bottom) }
-            }
-        }
-        return edges
     }
 
     /// Inverse of `ScreenGeometry.cocoaRect(fromCGRect:primaryHeight:)`.

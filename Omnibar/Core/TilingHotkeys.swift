@@ -1,7 +1,7 @@
 import Carbon
 import Foundation
 
-/// Global Left/Right Arrow hotkeys for keyboard tiling. Uses Carbon
+/// Global Left/Right/Up Arrow hotkeys for keyboard tiling. Uses Carbon
 /// `RegisterEventHotKey`, which needs no Input Monitoring grant and does not
 /// see any other keystrokes.
 final class TilingHotkeys {
@@ -10,11 +10,13 @@ final class TilingHotkeys {
     private enum HotKey: UInt32 {
         case left = 1
         case right = 2
+        case up = 3
 
         var virtualKey: UInt32 {
             switch self {
             case .left: UInt32(kVK_LeftArrow)
             case .right: UInt32(kVK_RightArrow)
+            case .up: UInt32(kVK_UpArrow)
             }
         }
 
@@ -22,6 +24,15 @@ final class TilingHotkeys {
             switch self {
             case .left: .left
             case .right: .right
+            case .up: .up
+            }
+        }
+
+        var arrow: String {
+            switch self {
+            case .left: "←"
+            case .right: "→"
+            case .up: "↑"
             }
         }
     }
@@ -75,7 +86,7 @@ final class TilingHotkeys {
 
     private func register(modifiers: TilingModifiers) {
         installHandlerIfNeeded()
-        for key in [HotKey.left, HotKey.right] {
+        for key in [HotKey.left, HotKey.right, HotKey.up] {
             var ref: EventHotKeyRef?
             let id = EventHotKeyID(signature: Self.signature, id: key.rawValue)
             let status = RegisterEventHotKey(
@@ -89,7 +100,7 @@ final class TilingHotkeys {
             if status == noErr, let ref {
                 hotKeyRefs.append(ref)
             } else if status == OSStatus(eventHotKeyExistsErr) {
-                NSLog("Omnibar tiling hotkey \(modifiers.symbol)\(key == .left ? "←" : "→") is owned by another app")
+                NSLog("Omnibar tiling hotkey \(modifiers.symbol)\(key.arrow) is owned by another app")
             } else {
                 NSLog("Omnibar tiling hotkey registration failed: \(status)")
             }

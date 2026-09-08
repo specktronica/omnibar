@@ -47,7 +47,6 @@ struct AppSettings: Codable, Equatable, Sendable {
     var startLogo: StartLogoPalette = .classic
     var tilingShortcutsEnabled: Bool = true
     var tilingModifiers: TilingModifiers = .controlOption
-    var dragToTileEnabled: Bool = true
 
     static let `default` = AppSettings()
 
@@ -100,7 +99,6 @@ extension AppSettings {
         case startLogo
         case tilingShortcutsEnabled
         case tilingModifiers
-        case dragToTileEnabled
     }
 
     init(from decoder: Decoder) throws {
@@ -151,7 +149,5 @@ extension AppSettings {
             ?? defaults.tilingShortcutsEnabled
         tilingModifiers = try container.decodeIfPresent(TilingModifiers.self, forKey: .tilingModifiers)
             ?? defaults.tilingModifiers
-        dragToTileEnabled = try container.decodeIfPresent(Bool.self, forKey: .dragToTileEnabled)
-            ?? defaults.dragToTileEnabled
     }
 }

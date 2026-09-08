@@ -108,7 +108,7 @@ xcodebuild -project Omnibar.xcodeproj -scheme Omnibar -destination 'platform=mac
 
 `OmnibarTests` is a unit-test bundle with `TEST_HOST` pointing at `Omnibar.app`. The test target must use the same development team as the app; ad-hoc signing the host fails with a Team ID mismatch on load.
 
-Tests are pure-logic only. There are no live Accessibility, hotkey, or event-monitor tests; tiling is covered through `TilingGeometryTests` (usable area, tile frames, keyboard cycle, snap zones, shared edges, coordinate conversion, Carbon flags) and the settings-decode tests.
+Tests are pure-logic only. There are no live Accessibility, hotkey, or event-monitor tests; tiling is covered through `TilingGeometryTests` (usable area, tile frames, keyboard cycle, coordinate conversion, Carbon flags) and the settings-decode tests.
 
 There is no `make test` target.
 

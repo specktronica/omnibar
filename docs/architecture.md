@@ -10,7 +10,7 @@ Omnibar/
   Bridge/       Accessibility, SkyLight/CGS, Dock badge AX
   Core/         scan, track, screens, Dock, catalog, thumbnails, actions, tiling
   Model/        settings, pins, blacklist, order, snapshots, geometry
-  UI/           taskbar, Start Menu, settings, onboarding, snap preview
+  UI/           taskbar, Start Menu, settings, onboarding
   Resources/    assets, entitlements
 OmnibarTests/   logic and geometry tests (no live window-server tests)
 project.yml     XcodeGen spec
@@ -25,9 +25,9 @@ scripts/        bootstrap (XcodeGen), build, package/notarize, Homebrew publish,
 2. Create the menu extra (`StatusItemController`).
 3. Start `AppCatalog` (application directories + recents).
 4. Apply Dock hiding from settings (`DockManager`).
-5. If Accessibility is trusted, start `WindowTracker`, `ScreenMonitor`, `TilingHotkeys`, and `DragSnapController`. Otherwise show onboarding. The taskbar does not start while onboarding is showing; Continue (or closing the window) posts `.omnibarPermissionsDidChange` after `isShowing` is cleared. Screen Recording is effective for capture only when `CGPreflightScreenCaptureAccess()` was already true at process start. A mid-session grant is pending restart: preflight stays false until relaunch, so onboarding detects the TCC toggle via other processes’ normal-level window titles (`kCGWindowName`). Windows not at the normal window level (menu bar, wallpaper, Dock, Control Center) are ignored because those titles appear without Screen Recording.
+5. If Accessibility is trusted, start `WindowTracker`, `ScreenMonitor`, and `TilingHotkeys`. Otherwise show onboarding. The taskbar does not start while onboarding is showing; Continue (or closing the window) posts `.omnibarPermissionsDidChange` after `isShowing` is cleared. Screen Recording is effective for capture only when `CGPreflightScreenCaptureAccess()` was already true at process start. A mid-session grant is pending restart: preflight stays false until relaunch, so onboarding detects the TCC toggle via other processes’ normal-level window titles (`kCGWindowName`). Windows not at the normal window level (menu bar, wallpaper, Dock, Control Center) are ignored because those titles appear without Screen Recording.
 
-On quit, Dock prefs are restored, then hotkeys, drag snap, tracker, screen monitor, and catalog stop.
+On quit, Dock prefs are restored, then hotkeys, tracker, screen monitor, and catalog stop.
 
 ## Window list pipeline
 
@@ -78,22 +78,15 @@ Each `TaskbarPanel` owns a `StartMenuPanel` and `ThumbnailPopover`. Thumbnails u
 ```mermaid
 flowchart LR
   hotkeys[TilingHotkeys] --> tiler[WindowTiler]
-  drag[DragSnapController] --> geometry[TilingGeometry]
-  drag --> preview[SnapPreviewPanel]
-  drag --> tiler
-  tiler --> geometry
+  tiler --> geometry[TilingGeometry]
   tiler --> ax[AXBridge.setFrame]
 ```
 
-`TilingGeometry` (Model) is pure and `nonisolated`: `Tile` frames inside a usable rect, the left/right cycle (`nextTile`), the usable area (`visibleFrame` with its bottom raised above the Taskbar when `ScreenMonitor.showsTaskbar(on:)`), drag snap zones, shared display edges, and the Cocoa→CG inverse of `ScreenGeometry.cocoaRect`.
+`TilingGeometry` (Model) is pure and `nonisolated`: `Tile` frames inside a usable rect, the left/right/up cycle (`nextTile`), the usable area (`visibleFrame` with its bottom raised above the Taskbar when `ScreenMonitor.showsTaskbar(on:)`), and the Cocoa→CG inverse of `ScreenGeometry.cocoaRect`.
 
 `WindowTiler` resolves the frontmost app's focused window, requires `AXWindow` / `AXStandardWindow`, not fullscreen or minimized, and settable position and size (`AXUIElementIsAttributeSettable`). It converts between Cocoa and CG coordinates, calls `AXBridge.setFrame` (position, size, re-read, re-apply position if the app shifted the origin while clamping), and keeps `[CGWindowID: AppliedTile]` so a clamped window can still advance through the cycle. The memory is pruned to the current snapshot's window IDs on `.omnibarSnapshotDidChange`.
 
-`TilingHotkeys` registers Left/Right Arrow with the configured modifiers through Carbon `RegisterEventHotKey` on the application event target. The C handler is `nonisolated` and hops to the main actor. No `CGEventTap` is used, so no Input Monitoring grant is needed. `eventHotKeyExistsErr` (another app owns the combination) is logged and left unregistered. Registration follows `tilingShortcutsEnabled` and `tilingModifiers` through `.omnibarSettingsDidChange`.
-
-`DragSnapController` installs global `NSEvent` monitors for left mouse down, dragged, and up (same mechanism as `ScreenMonitor` auto-hide). On mouse-down it records the layer-0 window under the cursor from `CGWindowListCopyWindowInfo` (id, pid, bounds); this has to happen before the window starts following the cursor, or the hit test finds the window behind it. A press over a bar, Start Menu, or thumbnail is ignored. After 4 pt of movement it maps the hit to an AX element (tracker cache first) and rejects non-tileable windows. Every 40 ms it reads the AX frame; a drag counts as a move once the origin has changed by 3 pt from the mouse-down bounds with the size unchanged, which excludes resizes. Snap zones are computed for the screen under the cursor with that screen's shared edges removed; `SnapPreviewPanel` (borderless, non-activating, floating, mouse-transparent) shows the target frame. On mouse-up the tile is applied after 50 ms so the dragged app finishes its own move first. Monitors follow `dragToTileEnabled`.
-
-macOS 15+ edge tiling (`com.apple.WindowManager` `EnableTilingByEdgeDrag`, default on) acts on the same gesture: it animates the window to its own tile for about 0.35 s after mouse-up and ignores Accessibility frame changes until roughly 0.6 s. `DragSnapController` therefore re-checks the frame at +0.7 s, +1.2 s, and +1.7 s after the first apply and re-applies the tile when the window is neither on the target nor on the frame the app last accepted. The Tiling settings pane reads the same key and shows a note with a link to Desktop & Dock when it is on.
+`TilingHotkeys` registers Left/Right/Up Arrow with the configured modifiers through Carbon `RegisterEventHotKey` on the application event target. The C handler is `nonisolated` and hops to the main actor. No `CGEventTap` is used, so no Input Monitoring grant is needed. `eventHotKeyExistsErr` (another app owns the combination) is logged and left unregistered. Registration follows `tilingShortcutsEnabled` and `tilingModifiers` through `.omnibarSettingsDidChange`.
 
 ## Persistence
 
@@ -114,9 +107,8 @@ All of these are keys in `UserDefaults.standard`:
 | Area | Mechanism |
 | --- | --- |
 | Window titles, raise/minimize/close/fullscreen, move/resize for tiling | Accessibility (`AXUIElement`) |
-| Window frames, on-screen set, layers, window under the cursor | `CGWindowListCopyWindowInfo` |
+| Window frames, on-screen set, layers | `CGWindowListCopyWindowInfo` |
 | Tiling hotkeys | Carbon `RegisterEventHotKey` |
-| Drag detection for drag-to-tile | Global `NSEvent` mouse monitors |
 | Spaces and fullscreen Spaces | SkyLight (`dlopen` of `CGS*` / `SLS*` symbols) |
 | Mission Control Dock strip | `CGSSetWindowLevel` on Dock windows |
 | Live thumbnails | ScreenCaptureKit |

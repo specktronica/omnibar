@@ -62,28 +62,13 @@ Default shortcuts are Control + Option + Arrow. The modifier set is configurable
 | --- | --- |
 | ⌃⌥→ | Right half. Press again: top-right quarter, then bottom-right quarter, then right half |
 | ⌃⌥← | Left half. Press again: top-left quarter, then bottom-left quarter, then left half |
+| ⌃⌥↑ | Top half. Press again: fill the usable area, then top half |
 
 Omnibar treats a press as a repeat when the focused window's frame is within 8 points of the last tile. If the app refused the size (a minimum-size clamp), the frame Omnibar observed after the last tile is used instead. Moving or resizing the window by hand restarts the cycle at the half.
 
-Choosing **Control** alone collides with Mission Control's “Move left a space” / “Move right a space”. macOS takes those keys first, so tiling does nothing until you turn them off in System Settings → Keyboard → Keyboard Shortcuts → Mission Control. Settings → Tiling shows this note and a button to that pane.
+Choosing **Control** alone collides with Mission Control itself (⌃↑) and “Move left a space” / “Move right a space”. macOS takes those keys first, so tiling does nothing until you turn them off in System Settings → Keyboard → Keyboard Shortcuts → Mission Control. Settings → Tiling shows this note and a button to that pane.
 
 If another app has already registered the same combination, Omnibar logs the conflict and leaves the shortcut unregistered.
-
-### Drag to tile
-
-Drag a window by its title bar to a screen edge. A translucent outline previews the tile; release to apply.
-
-| Cursor position | Result |
-| --- | --- |
-| Left or right edge | Half |
-| Left or right edge, in the top or bottom 20% of the screen | Quarter on that side |
-| Top edge | Fill the usable area |
-| Bottom edge | No snap (that is where the Taskbar is) |
-| An edge shared with another display | No snap, so the cursor can cross to the other display |
-
-Drags that resize a window, or that start over the Taskbar, Start Menu, or a thumbnail, are not treated as tiling drags.
-
-macOS 15 and later has its own drag-to-edge tiling (System Settings → Desktop & Dock → Windows → “Tile by dragging windows to screen edges”, on by default). Its tiles cover the Taskbar. When both are on, macOS animates the window to its tile first and Omnibar moves it onto the Omnibar tile about half a second later. Settings → Tiling shows a note and a button to that pane when the macOS setting is on; turn it off to avoid the double move.
 
 ## Settings
 
@@ -94,7 +79,7 @@ Open from the menu extra, the taskbar **Taskbar → Settings…** item, or by re
 | General | Launch at login, fully hide Dock, auto-hide taskbar, Start button action |
 | Appearance | Match system appearance or force dark, transparency, bar height, font size, icons-only, Start logo presets and per-lobe colors |
 | Behavior | Group by application, show tabs as items, indicate minimized/hidden, hide instead of minimize on click, Show desktop button, drag reorder, keep order across Space changes, auto-resize overlapping windows |
-| Tiling | Keyboard tiling on/off, modifier set (Control + Option, Control, Control + Command, Control + Option + Command), current shortcuts, Mission Control note when Control alone is selected, drag to tile on/off, macOS drag-tiling note when that system setting is on |
+| Tiling | Keyboard tiling on/off, modifier set (Control + Option, Control, Control + Command, Control + Option + Command), current shortcuts, Mission Control note when Control alone is selected |
 | Thumbnails | Hover delay, size, title in thumbnail, request Screen Recording |
 | Displays | Main display only, show windows from all screens, per-display visibility |
 | Start Menu | Start button action, recent-apps count |
@@ -136,7 +121,6 @@ Reset to defaults restores `AppSettings.default` except **Launch at login**, whi
 | Start logo | Classic |
 | Keyboard tiling | on |
 | Tiling modifiers | Control + Option |
-| Drag to tile | on |
 
 Logo presets: Classic, Sunset, Ocean, Forest, Candy, Neon, Mono. Each of the four lobes can be recolored.
 

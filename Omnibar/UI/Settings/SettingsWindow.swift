@@ -252,7 +252,6 @@ private struct BehaviorPane: View {
 
 private struct TilingPane: View {
     @Binding var settings: AppSettings
-    @State private var systemEdgeTiling = DragSnapController.systemEdgeTilingEnabled
 
     private static let keyboardShortcutsURL = URL(
         string: "x-apple.systempreferences:com.apple.Keyboard-Settings.extension?Shortcuts"
@@ -260,51 +259,34 @@ private struct TilingPane: View {
 
     var body: some View {
         Form {
-            Section("Keyboard") {
-                Toggle("Tile the focused window with keyboard shortcuts", isOn: $settings.tilingShortcutsEnabled)
-                Picker("Modifiers", selection: $settings.tilingModifiers) {
-                    ForEach(TilingModifiers.allCases) { modifiers in
-                        Text(modifiers.title).tag(modifiers)
-                    }
-                }
-                .disabled(!settings.tilingShortcutsEnabled)
-                LabeledContent("Tile left", value: "\(settings.tilingModifiers.symbol)←")
-                LabeledContent("Tile right", value: "\(settings.tilingModifiers.symbol)→")
-                Text("Press again to cycle: half → top quarter → bottom quarter → half.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                if settings.tilingModifiers.conflictsWithMissionControl {
-                    Text("Mission Control uses Control + Arrow to switch Spaces and takes the key first. Turn off “Move left a space” and “Move right a space” under Keyboard Shortcuts → Mission Control.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Button("Open Keyboard Shortcuts…") {
-                        if let url = Self.keyboardShortcutsURL {
-                            NSWorkspace.shared.open(url)
-                        }
-                    }
+            Toggle("Tile the focused window with keyboard shortcuts", isOn: $settings.tilingShortcutsEnabled)
+            Picker("Modifiers", selection: $settings.tilingModifiers) {
+                ForEach(TilingModifiers.allCases) { modifiers in
+                    Text(modifiers.title).tag(modifiers)
                 }
             }
-            Section("Mouse") {
-                Toggle("Drag a window to a screen edge to tile it", isOn: $settings.dragToTileEnabled)
-                Text("Left or right edge: half. Top or bottom fifth of that edge: quarter. Top edge: fill the screen. Tiles sit above the Taskbar. Edges shared with another display do not snap.")
+            .disabled(!settings.tilingShortcutsEnabled)
+            LabeledContent("Tile left", value: "\(settings.tilingModifiers.symbol)←")
+            LabeledContent("Tile right", value: "\(settings.tilingModifiers.symbol)→")
+            LabeledContent("Tile up", value: "\(settings.tilingModifiers.symbol)↑")
+            Text("Left/right: press again to cycle half → top quarter → bottom quarter → half.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text("Up: press again to fill the usable area, then back to the top half.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            if settings.tilingModifiers.conflictsWithMissionControl {
+                Text("Mission Control uses Control + Arrow and takes the key first. Turn off “Move left a space”, “Move right a space”, and “Mission Control” under Keyboard Shortcuts → Mission Control.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                if settings.dragToTileEnabled, systemEdgeTiling {
-                    Text("macOS also tiles windows dragged to a screen edge, and its tiles cover the Taskbar. Omnibar corrects the frame after the macOS animation. To avoid the double move, turn off “Tile by dragging windows to screen edges” under Desktop & Dock → Windows.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Button("Open Desktop & Dock…") {
-                        if let url = DragSnapController.systemWindowsSettingsURL {
-                            NSWorkspace.shared.open(url)
-                        }
+                Button("Open Keyboard Shortcuts…") {
+                    if let url = Self.keyboardShortcutsURL {
+                        NSWorkspace.shared.open(url)
                     }
                 }
             }
         }
         .formStyle(.grouped)
-        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-            systemEdgeTiling = DragSnapController.systemEdgeTilingEnabled
-        }
     }
 }
 
