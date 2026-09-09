@@ -44,7 +44,7 @@ The popover shows up to three cards at a time and pages when a group has more. L
 
 The Start Menu is a panel above the Start button: search field, A–Z application list, **Pinned Apps** grid (same pin list as the taskbar), and **Recent Apps**.
 
-Search filters by app name (case-insensitive substring). Launching an app records it in recents, capped by Settings → Start Menu (3–20, default 10). Omnibar itself is not added to recents.
+Search filters by app name (case-insensitive substring). Up/Down move the highlight in the app list (including while filtering); Enter launches the highlighted app. Launching an app records it in recents, capped by Settings → Start Menu (3–20, default 10). Omnibar itself is not added to recents.
 
 The catalog is scanned from `/Applications`, `/System/Applications`, `/System/Applications/Utilities`, and `~/Applications`.
 

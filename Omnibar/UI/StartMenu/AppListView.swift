@@ -1,6 +1,26 @@
 import AppKit
 import Foundation
 
+nonisolated enum StartMenuListNavigation: Sendable {
+    static func indexAfterMove(current: Int?, count: Int, delta: Int) -> Int? {
+        guard count > 0 else { return nil }
+        if let current {
+            return min(max(current + delta, 0), count - 1)
+        }
+        return delta >= 0 ? 0 : count - 1
+    }
+
+    static func indexAfterReload(previousID: String?, ids: [String], autoselectFirst: Bool) -> Int? {
+        if let previousID, let index = ids.firstIndex(of: previousID) {
+            return index
+        }
+        if autoselectFirst, !ids.isEmpty {
+            return 0
+        }
+        return nil
+    }
+}
+
 final class AppListView: NSScrollView {
     var onLaunch: ((AppCatalog.CatalogApp) -> Void)?
     private let document = FlippedView()
@@ -10,6 +30,13 @@ final class AppListView: NSScrollView {
     private var renderedIDs: [String] = []
     private var hoveredRow: AppRow?
     private var listTracking: NSTrackingArea?
+    private var highlightSource: HighlightSource = .mouse
+    private var frozenMouseLocation: NSPoint?
+
+    private enum HighlightSource {
+        case mouse
+        case keyboard
+    }
 
     var highlightedAppNames: [String] {
         rows.filter(\.isHovered).map(\.appName)
@@ -39,17 +66,39 @@ final class AppListView: NSScrollView {
         NotificationCenter.default.removeObserver(self)
     }
 
-    func update(_ groups: [(letter: String, apps: [AppCatalog.CatalogApp])]) {
+    func update(
+        _ groups: [(letter: String, apps: [AppCatalog.CatalogApp])],
+        autoselectFirst: Bool = false
+    ) {
+        let previousID = hoveredRow.map(\.catalogApp.id)
         let ids = groups.flatMap { group in
             [group.letter] + group.apps.map(\.id)
         }
         if ids == renderedIDs {
             contentView.scroll(to: .zero)
-            updateHoverFromMouse()
+            applyReloadSelection(previousID: previousID, autoselectFirst: autoselectFirst)
             return
         }
         renderedIDs = ids
         rebuild(groups)
+        applyReloadSelection(previousID: previousID, autoselectFirst: autoselectFirst)
+    }
+
+    func moveSelection(delta: Int) {
+        let current = hoveredRow.flatMap { row in
+            rows.firstIndex { $0 === row }
+        }
+        guard let index = StartMenuListNavigation.indexAfterMove(
+            current: current,
+            count: rows.count,
+            delta: delta
+        ) else { return }
+        setKeyboardHighlight(rows[index])
+    }
+
+    func launchSelected() {
+        guard let hoveredRow else { return }
+        onLaunch?(hoveredRow.catalogApp)
     }
 
     private func rebuild(_ groups: [(letter: String, apps: [AppCatalog.CatalogApp])]) {
@@ -117,7 +166,6 @@ final class AppListView: NSScrollView {
         contentView.scroll(to: .zero)
         reflectScrolledClipView(contentView)
         needsLayout = true
-        updateHoverFromMouse()
     }
 
     override func layout() {
@@ -157,11 +205,11 @@ final class AppListView: NSScrollView {
     }
 
     override func mouseEntered(with event: NSEvent) {
-        updateHover(from: event)
+        handleMouseMovement(atWindowPoint: event.locationInWindow)
     }
 
     override func mouseMoved(with event: NSEvent) {
-        updateHover(from: event)
+        handleMouseMovement(atWindowPoint: event.locationInWindow)
     }
 
     override func mouseExited(with event: NSEvent) {
@@ -185,6 +233,7 @@ final class AppListView: NSScrollView {
     }
 
     func updateHoverFromMouse() {
+        if highlightSource == .keyboard { return }
         guard let window else {
             syncHover(atDocumentPoint: nil)
             return
@@ -193,14 +242,12 @@ final class AppListView: NSScrollView {
     }
 
     func syncHover(atDocumentPoint point: NSPoint?) {
+        highlightSource = .mouse
+        frozenMouseLocation = nil
         let row = point.flatMap { location in
             rows.first { $0.frame.contains(location) }
         }
         setHoveredRow(row)
-    }
-
-    private func updateHover(from event: NSEvent) {
-        applyHover(atWindowPoint: event.locationInWindow)
     }
 
     private func applyHover(atWindowPoint mouseInWindow: NSPoint) {
@@ -210,6 +257,42 @@ final class AppListView: NSScrollView {
             return
         }
         syncHover(atDocumentPoint: document.convert(mouseInWindow, from: nil))
+    }
+
+    private func handleMouseMovement(atWindowPoint point: NSPoint) {
+        if highlightSource == .keyboard, frozenMouseLocation == point {
+            return
+        }
+        highlightSource = .mouse
+        frozenMouseLocation = nil
+        applyHover(atWindowPoint: point)
+    }
+
+    private func applyReloadSelection(previousID: String?, autoselectFirst: Bool) {
+        let ids = rows.map(\.catalogApp.id)
+        let index = StartMenuListNavigation.indexAfterReload(
+            previousID: previousID,
+            ids: ids,
+            autoselectFirst: autoselectFirst
+        )
+        if autoselectFirst || highlightSource == .keyboard {
+            if let index {
+                setKeyboardHighlight(rows[index])
+            } else {
+                highlightSource = .keyboard
+                frozenMouseLocation = window?.mouseLocationOutsideOfEventStream
+                setHoveredRow(nil)
+            }
+            return
+        }
+        updateHoverFromMouse()
+    }
+
+    private func setKeyboardHighlight(_ row: AppRow) {
+        highlightSource = .keyboard
+        frozenMouseLocation = window?.mouseLocationOutsideOfEventStream
+        setHoveredRow(row)
+        row.scrollToVisible(row.bounds)
     }
 
     private func setHoveredRow(_ row: AppRow?) {
@@ -232,6 +315,7 @@ private final class AppRow: NSView {
     private(set) var isHovered = false
 
     var appName: String { app.name }
+    var catalogApp: AppCatalog.CatalogApp { app }
 
     init(app: AppCatalog.CatalogApp) {
         self.app = app

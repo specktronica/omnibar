@@ -748,6 +748,88 @@ final class AppListViewTests: XCTestCase {
         view.updateHoverFromMouse()
         XCTAssertEqual(view.highlightedAppNames, [])
     }
+
+    @MainActor
+    func testArrowKeysMoveHighlightAndClamp() {
+        let view = AppListView(frame: NSRect(x: 0, y: 0, width: 300, height: 200))
+        view.update(AppCatalog.shared.groupedByLetter(Self.navApps))
+        view.layoutSubtreeIfNeeded()
+
+        view.moveSelection(delta: 1)
+        XCTAssertEqual(view.highlightedAppNames, ["Arcade"])
+        view.moveSelection(delta: 1)
+        XCTAssertEqual(view.highlightedAppNames, ["Books"])
+        view.moveSelection(delta: 1)
+        XCTAssertEqual(view.highlightedAppNames, ["Chess"])
+        view.moveSelection(delta: 1)
+        XCTAssertEqual(view.highlightedAppNames, ["Chess"])
+        view.moveSelection(delta: -1)
+        XCTAssertEqual(view.highlightedAppNames, ["Books"])
+        view.moveSelection(delta: -1)
+        XCTAssertEqual(view.highlightedAppNames, ["Arcade"])
+        view.moveSelection(delta: -1)
+        XCTAssertEqual(view.highlightedAppNames, ["Arcade"])
+    }
+
+    @MainActor
+    func testFilterAutoselectsFirstAndKeepsVisibleSelection() {
+        let view = AppListView(frame: NSRect(x: 0, y: 0, width: 300, height: 200))
+        view.update(AppCatalog.shared.groupedByLetter(Self.navApps))
+        view.update(
+            AppCatalog.shared.groupedByLetter(AppCatalog.filter(Self.navApps, query: "arc")),
+            autoselectFirst: true
+        )
+        XCTAssertEqual(view.highlightedAppNames, ["Arcade"])
+
+        view.update(AppCatalog.shared.groupedByLetter(Self.navApps), autoselectFirst: false)
+        view.moveSelection(delta: 1)
+        XCTAssertEqual(view.highlightedAppNames, ["Books"])
+
+        view.update(
+            AppCatalog.shared.groupedByLetter(AppCatalog.filter(Self.navApps, query: "book")),
+            autoselectFirst: true
+        )
+        XCTAssertEqual(view.highlightedAppNames, ["Books"])
+
+        view.update(
+            AppCatalog.shared.groupedByLetter(AppCatalog.filter(Self.navApps, query: "chess")),
+            autoselectFirst: true
+        )
+        XCTAssertEqual(view.highlightedAppNames, ["Chess"])
+    }
+
+    @MainActor
+    func testLaunchSelectedInvokesOnLaunch() {
+        let view = AppListView(frame: NSRect(x: 0, y: 0, width: 300, height: 200))
+        view.update(AppCatalog.shared.groupedByLetter(Self.navApps))
+        var launched: [String] = []
+        view.onLaunch = { launched.append($0.name) }
+
+        view.launchSelected()
+        XCTAssertEqual(launched, [])
+
+        view.moveSelection(delta: 1)
+        view.launchSelected()
+        XCTAssertEqual(launched, ["Arcade"])
+    }
+
+    @MainActor
+    func testKeyboardHighlightSurvivesMouseReconcile() {
+        let view = AppListView(frame: NSRect(x: 0, y: 0, width: 300, height: 80))
+        view.update(AppCatalog.shared.groupedByLetter(Self.navApps))
+        view.layoutSubtreeIfNeeded()
+        view.moveSelection(delta: 1)
+        view.moveSelection(delta: 1)
+        XCTAssertEqual(view.highlightedAppNames, ["Books"])
+        view.updateHoverFromMouse()
+        XCTAssertEqual(view.highlightedAppNames, ["Books"])
+    }
+
+    private static let navApps = [
+        AppCatalog.CatalogApp(bundleID: "a", name: "Arcade", url: URL(fileURLWithPath: "/tmp/Arcade.app")),
+        AppCatalog.CatalogApp(bundleID: "b", name: "Books", url: URL(fileURLWithPath: "/tmp/Books.app")),
+        AppCatalog.CatalogApp(bundleID: "c", name: "Chess", url: URL(fileURLWithPath: "/tmp/Chess.app"))
+    ]
 }
 
 final class TaskbarSnapshotUITests: XCTestCase {

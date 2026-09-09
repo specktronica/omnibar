@@ -49,6 +49,7 @@ final class StartMenuPanel: NSPanel {
         searchField.sendsSearchStringImmediately = true
         searchField.target = self
         searchField.action = #selector(searchChanged)
+        searchField.delegate = self
         effect.addSubview(searchField)
         effect.addSubview(appList)
         effect.addSubview(columnDivider)
@@ -137,6 +138,20 @@ final class StartMenuPanel: NSPanel {
         reload()
     }
 
+    @discardableResult
+    private func handleSearchCommand(_ command: StartMenuSearchCommand?) -> Bool {
+        switch command {
+        case .move(let delta):
+            appList.moveSelection(delta: delta)
+            return true
+        case .launch:
+            appList.launchSelected()
+            return true
+        case nil:
+            return false
+        }
+    }
+
     private func activateForSearch() {
         NSApp.activate()
         let current = NSRunningApplication.current
@@ -169,7 +184,8 @@ final class StartMenuPanel: NSPanel {
         if query != lastQuery || appIDs != lastAppIDs {
             lastQuery = query
             lastAppIDs = appIDs
-            appList.update(groups)
+            let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+            appList.update(groups, autoselectFirst: !trimmed.isEmpty)
         }
 
         let pins = PinStore.shared.pinnedBundleIDs
@@ -219,9 +235,16 @@ final class StartMenuPanel: NSPanel {
         removeMonitor()
         localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .keyDown]) { [weak self] event in
             guard let self else { return event }
-            if event.type == .keyDown, event.keyCode == 53 {
-                self.dismiss()
-                return nil
+            if event.type == .keyDown {
+                if event.keyCode == 53 {
+                    self.dismiss()
+                    return nil
+                }
+                if self.handleSearchCommand(
+                    StartMenuSearchCommand.from(keyCode: event.keyCode, modifierFlags: event.modifierFlags)
+                ) {
+                    return nil
+                }
             }
             if event.type == .leftMouseDown || event.type == .rightMouseDown {
                 return self.handleClickOutside(event)
@@ -333,6 +356,42 @@ nonisolated enum StartMenuOutsideClick: Sendable {
         if eventWindowIsMenu { return .pass }
         if isOpeningClick { return inStartButton ? .swallow : .pass }
         return .dismiss(swallow: inStartButton)
+    }
+}
+
+nonisolated enum StartMenuSearchCommand: Equatable, Sendable {
+    case move(Int)
+    case launch
+
+    static func from(_ selector: Selector) -> StartMenuSearchCommand? {
+        if selector == #selector(NSResponder.moveUp(_:)) { return .move(-1) }
+        if selector == #selector(NSResponder.moveDown(_:)) { return .move(1) }
+        if selector == #selector(NSResponder.insertNewline(_:)) { return .launch }
+        if selector == #selector(NSResponder.insertNewlineIgnoringFieldEditor(_:)) { return .launch }
+        return nil
+    }
+
+    static func from(keyCode: UInt16) -> StartMenuSearchCommand? {
+        switch keyCode {
+        case 126: return .move(-1)
+        case 125: return .move(1)
+        case 36, 76: return .launch
+        default: return nil
+        }
+    }
+
+    /// Arrow keys and keypad Enter arrive with `.function` / `.numericPad` set.
+    static func from(keyCode: UInt16, modifierFlags: NSEvent.ModifierFlags) -> StartMenuSearchCommand? {
+        let extras = modifierFlags.intersection(.deviceIndependentFlagsMask)
+            .subtracting([.function, .numericPad, .capsLock])
+        guard extras.isEmpty else { return nil }
+        return from(keyCode: keyCode)
+    }
+}
+
+extension StartMenuPanel: NSSearchFieldDelegate {
+    func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
+        handleSearchCommand(StartMenuSearchCommand.from(commandSelector))
     }
 }
 
