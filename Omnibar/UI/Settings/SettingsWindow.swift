@@ -322,6 +322,10 @@ private struct DisplaysPane: View {
         Form {
             Toggle("Show Taskbar only on the main display", isOn: $settings.mainDisplayOnly)
             Toggle("Show windows from all screens on every Taskbar", isOn: $settings.showWindowsFromAllScreens)
+            Toggle("Show windows from all Spaces on every Taskbar", isOn: $settings.showWindowsFromAllSpaces)
+            Text("Other desktops stay listed. Together with all screens, every display’s desktops are listed.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
             Section("Displays") {
                 ForEach(NSScreen.screens, id: \.displayID) { screen in
                     Toggle(screen.localizedName, isOn: displayVisibleBinding(screen.displayID))

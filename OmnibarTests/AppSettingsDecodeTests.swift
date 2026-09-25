@@ -20,7 +20,8 @@ final class AppSettingsDecodeTests: XCTestCase {
             "autoHide",
             "showTabsAsItems",
             "tilingShortcutsEnabled",
-            "tilingModifiers"
+            "tilingModifiers",
+            "showWindowsFromAllSpaces"
         ] {
             object.removeValue(forKey: key)
         }
@@ -39,6 +40,7 @@ final class AppSettingsDecodeTests: XCTestCase {
         XCTAssertTrue(decoded.tilingShortcutsEnabled)
         XCTAssertEqual(decoded.tilingModifiers, AppSettings.default.tilingModifiers)
         XCTAssertEqual(decoded.tilingModifiers, .controlOption)
+        XCTAssertFalse(decoded.showWindowsFromAllSpaces)
         XCTAssertEqual(decoded.transparency, 0.33)
         XCTAssertEqual(decoded.startButtonAction, .launchpad)
     }

@@ -22,12 +22,14 @@ nonisolated final class CGSBridge: SpacesProviding, Sendable {
     private typealias CopySpacesForWindowsProc = @convention(c) (CGSConnectionID, Int32, CFArray) -> Unmanaged<CFArray>?
     private typealias ManagedDisplayGetCurrentSpaceProc = @convention(c) (CGSConnectionID, CFString) -> CGSSpaceID
     private typealias SpaceGetTypeProc = @convention(c) (CGSConnectionID, CGSSpaceID) -> Int32
+    private typealias SetCurrentSpaceProc = @convention(c) (CGSConnectionID, CFString, CGSSpaceID) -> Void
 
     private let mainConnection: MainConnectionProc?
     private let copyManagedDisplaySpaces: CopyManagedDisplaySpacesProc?
     private let copySpacesForWindows: CopySpacesForWindowsProc?
     private let managedDisplayGetCurrentSpace: ManagedDisplayGetCurrentSpaceProc?
     private let spaceGetType: SpaceGetTypeProc?
+    private let setCurrentSpaceProc: SetCurrentSpaceProc?
     private let connection: CGSConnectionID
 
     private static let allSpacesSelector: Int32 = 7
@@ -49,6 +51,8 @@ nonisolated final class CGSBridge: SpacesProviding, Sendable {
             ?? load("SLSManagedDisplayGetCurrentSpace", as: ManagedDisplayGetCurrentSpaceProc.self)
         spaceGetType = load("CGSSpaceGetType", as: SpaceGetTypeProc.self)
             ?? load("SLSSpaceGetType", as: SpaceGetTypeProc.self)
+        setCurrentSpaceProc = load("SLSManagedDisplaySetCurrentSpace", as: SetCurrentSpaceProc.self)
+            ?? load("CGSManagedDisplaySetCurrentSpace", as: SetCurrentSpaceProc.self)
         connection = mainConnection?() ?? 0
     }
 
@@ -139,8 +143,31 @@ nonisolated final class CGSBridge: SpacesProviding, Sendable {
         return result
     }
 
+    /// Switches to the first Space in `spaces` that is not already visible.
+    /// Returns true only when a switch was issued.
+    func revealSpace(forWindow spaces: [UInt64]) -> Bool {
+        guard !spaces.isEmpty, setCurrentSpaceProc != nil, let parsed = managedSpaces() else { return false }
+        let visible = Set(parsed.map(\.currentSpace))
+        guard let hidden = spaces.first(where: { !visible.contains($0) }) else { return false }
+        return switchToSpace(hidden)
+    }
+
+    /// Makes `space` the visible Space on the display that owns it.
+    /// Already-visible Spaces count as success so the caller can still raise the window.
+    func switchToSpace(_ space: UInt64) -> Bool {
+        guard space != 0, let proc = setCurrentSpaceProc else { return false }
+        guard let parsed = managedSpaces() else { return false }
+        guard let display = parsed.first(where: {
+            $0.currentSpace == space || $0.spaceTypes.keys.contains(space)
+        }), !display.uuid.isEmpty else { return false }
+        if display.currentSpace == space { return true }
+        proc(connection, display.uuid as CFString, CGSSpaceID(space))
+        return true
+    }
+
     private struct DisplaySpaces {
         var displayID: CGDirectDisplayID
+        var uuid: String
         var currentSpace: UInt64
         var currentType: Int32
         var spaceTypes: [UInt64: Int32]
@@ -168,6 +195,7 @@ nonisolated final class CGSBridge: SpacesProviding, Sendable {
             }
             displays.append(DisplaySpaces(
                 displayID: displayID,
+                uuid: uuid,
                 currentSpace: currentID,
                 currentType: currentType,
                 spaceTypes: types

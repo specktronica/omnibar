@@ -171,14 +171,30 @@ final class TaskItemView: NSView {
             titleView.frame = CGRect(x: x, y: 0, width: max(0, bounds.width - x - padding), height: bounds.height)
         }
         let badge = Self.badgeLength(iconLength: icon)
-        let badgeInset = badge * (8 / 14)
-        badgeView.frame = CGRect(
-            x: iconView.frame.maxX - badgeInset,
-            y: iconView.frame.maxY - badgeInset,
-            width: badge,
-            height: badge
-        )
+        badgeView.frame = Self.badgeFrame(iconFrame: iconView.frame, in: bounds, length: badge)
         badgeView.isHidden = item.badge == nil
+    }
+
+    /// Hang the badge off the icon's top-right corner, then shift it back inside
+    /// the tile. The overhang is 6/14 of the badge, which passes the 6pt icon
+    /// inset once the badge grows past 14pt.
+    static func badgeFrame(iconFrame: CGRect, in tileBounds: CGRect, length: CGFloat) -> CGRect {
+        let inset = length * (8 / 14)
+        var frame = CGRect(
+            x: iconFrame.maxX - inset,
+            y: iconFrame.maxY - inset,
+            width: length,
+            height: length
+        )
+        frame.origin.x = fitted(frame.origin.x, span: frame.width, low: tileBounds.minX, high: tileBounds.maxX)
+        frame.origin.y = fitted(frame.origin.y, span: frame.height, low: tileBounds.minY, high: tileBounds.maxY)
+        return frame
+    }
+
+    private static func fitted(_ origin: CGFloat, span: CGFloat, low: CGFloat, high: CGFloat) -> CGFloat {
+        let limit = high - span
+        guard limit > low else { return low }
+        return min(max(origin, low), limit)
     }
 
     /// Icons grow with the taskbar: fill the tile minus a 6pt inset on each edge.
@@ -252,7 +268,10 @@ final class TaskItemView: NSView {
             dotsView.count = 0
             dotsView.activeIndex = nil
         } else {
-            dotsView.count = 1
+            dotsView.count = WindowDotsView.markCount(
+                windowCount: item.windows.count,
+                grouped: settings.groupByApplication
+            )
             dotsView.activeIndex = item.isActive ? 0 : nil
         }
         let fontSize = CGFloat(settings.fontSize)
@@ -358,8 +377,60 @@ private final class VerticallyCenteredTextFieldCell: NSTextFieldCell {
     }
 }
 
-private final class WindowDotsView: NSView {
+final class WindowDotsView: NSView {
     static let bandHeight: CGFloat = 6
+
+    /// One window keeps the pill. Grouping draws two dots for two windows and three for more.
+    nonisolated static func markCount(windowCount: Int, grouped: Bool) -> Int {
+        guard windowCount > 0 else { return 0 }
+        guard grouped, windowCount > 1 else { return 1 }
+        return min(3, windowCount)
+    }
+
+    /// Frames for the pill (`count == 1`) or for up to three dots.
+    nonisolated static func markFrames(count: Int, active: Bool, in bounds: CGRect) -> [CGRect] {
+        guard count >= 1, bounds.width > 0, bounds.height > 0 else { return [] }
+        if count == 1 {
+            let height: CGFloat = 3
+            let width = bounds.width * (active ? 22.0 / 26.0 : 12.0 / 26.0)
+            return [CGRect(
+                x: (bounds.width - width) / 2,
+                y: (bounds.height - height) / 2,
+                width: width,
+                height: height
+            )]
+        }
+        let shown = min(3, count)
+        let (diameter, gap) = dotSize(count: shown, width: bounds.width, bandHeight: bounds.height)
+        let total = CGFloat(shown) * diameter + CGFloat(shown - 1) * gap
+        var x = (bounds.width - total) / 2
+        let y = (bounds.height - diameter) / 2
+        var frames: [CGRect] = []
+        frames.reserveCapacity(shown)
+        for _ in 0..<shown {
+            frames.append(CGRect(x: x, y: y, width: diameter, height: diameter))
+            x += diameter + gap
+        }
+        return frames
+    }
+
+    /// 4pt dots with 3pt gaps. Three dots tighten to stay inside a 16pt icon.
+    nonisolated private static func dotSize(count: Int, width: CGFloat, bandHeight: CGFloat) -> (CGFloat, CGFloat) {
+        let preferredDiameter = min(4, bandHeight)
+        let preferredGap: CGFloat = 3
+        let n = CGFloat(count)
+        guard count >= 2 else { return (preferredDiameter, preferredGap) }
+        let preferredWidth = n * preferredDiameter + (n - 1) * preferredGap
+        if preferredWidth <= width {
+            return (preferredDiameter, preferredGap)
+        }
+        let gapForPreferredDots = (width - n * preferredDiameter) / (n - 1)
+        if gapForPreferredDots >= 2 {
+            return (preferredDiameter, gapForPreferredDots)
+        }
+        let unit = width / (n * 4 + (n - 1) * 3)
+        return (unit * 4, unit * 3)
+    }
 
     var count: Int = 0 {
         didSet {
@@ -381,18 +452,18 @@ private final class WindowDotsView: NSView {
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
     override func draw(_ dirtyRect: NSRect) {
-        guard count >= 1 else { return }
-        let active = activeIndex != nil
-        let height: CGFloat = 3
-        let width: CGFloat = bounds.width * (active ? 22 / 26 : 12 / 26)
-        let rect = CGRect(
-            x: (bounds.width - width) / 2,
-            y: (bounds.height - height) / 2,
-            width: width,
-            height: height
-        )
-        NSColor.systemBlue.withAlphaComponent(active ? 1 : 0.55).setFill()
-        NSBezierPath(roundedRect: rect, xRadius: height / 2, yRadius: height / 2).fill()
+        let frames = Self.markFrames(count: count, active: activeIndex != nil, in: bounds)
+        guard !frames.isEmpty else { return }
+        let alpha: CGFloat = activeIndex == nil ? 0.55 : 1
+        NSColor.systemBlue.withAlphaComponent(alpha).setFill()
+        let dots = count > 1
+        for frame in frames {
+            if dots {
+                NSBezierPath(ovalIn: frame).fill()
+            } else {
+                NSBezierPath(roundedRect: frame, xRadius: frame.height / 2, yRadius: frame.height / 2).fill()
+            }
+        }
     }
 }
 

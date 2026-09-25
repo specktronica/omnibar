@@ -1,3 +1,4 @@
+import AppKit
 import CoreGraphics
 import XCTest
 @testable import Omnibar
@@ -120,6 +121,7 @@ final class SettingsTests: XCTestCase {
         var settings = AppSettings.default
         settings.transparency = 0.2
         settings.groupByApplication = true
+        settings.showWindowsFromAllSpaces = true
         settings.startButtonAction = .spotlight
         settings.hiddenDisplayIDs = [11, 22]
         let data = try JSONEncoder().encode(settings)
@@ -241,9 +243,9 @@ final class TaskListLogicTests: XCTestCase {
     }
 
     @MainActor
-    func testShowAllScreensIgnoresSpaceFilter() {
-        let a = stubWindow(id: 1, screen: 1, spaces: [10])
-        let b = stubWindow(id: 2, screen: 2, spaces: [11])
+    func testShowAllScreensIncludesVisibleWindowsOnOtherDisplays() {
+        let a = stubWindow(id: 1, screen: 1, spaces: [10], onScreen: true)
+        let b = stubWindow(id: 2, screen: 2, spaces: [11], onScreen: true)
         var settings = AppSettings.default
         settings.showWindowsFromAllScreens = true
         let result = TaskListLogic.windows(
@@ -252,7 +254,63 @@ final class TaskListLogicTests: XCTestCase {
             currentSpace: 10,
             settings: settings
         )
-        XCTAssertEqual(result.count, 2)
+        XCTAssertEqual(result.map(\.id), [1, 2])
+    }
+
+    @MainActor
+    func testShowAllScreensDoesNotIncludeInactiveSpaces() {
+        let hidden = stubWindow(id: 2, screen: 1, spaces: [11], onScreen: false)
+        var settings = AppSettings.default
+        settings.showWindowsFromAllScreens = true
+        settings.showWindowsFromAllSpaces = false
+        let result = TaskListLogic.windows(
+            from: [hidden],
+            onScreen: 1,
+            currentSpace: 10,
+            settings: settings
+        )
+        XCTAssertTrue(result.isEmpty)
+    }
+
+    @MainActor
+    func testShowAllSpacesIncludesThisDisplayOnly() {
+        let here = stubWindow(id: 1, screen: 1, spaces: [11], onScreen: false)
+        let there = stubWindow(id: 2, screen: 2, spaces: [12], onScreen: false)
+        var settings = AppSettings.default
+        settings.showWindowsFromAllSpaces = true
+        let result = TaskListLogic.windows(
+            from: [here, there],
+            onScreen: 1,
+            currentSpace: 10,
+            settings: settings
+        )
+        XCTAssertEqual(result.map(\.id), [1])
+    }
+
+    @MainActor
+    func testShowAllScreensAndSpacesIncludesEveryWindow() {
+        let here = stubWindow(id: 1, screen: 1, spaces: [11], onScreen: false)
+        let there = stubWindow(id: 2, screen: 2, spaces: [12], onScreen: false)
+        var settings = AppSettings.default
+        settings.showWindowsFromAllScreens = true
+        settings.showWindowsFromAllSpaces = true
+        let result = TaskListLogic.windows(
+            from: [here, there],
+            onScreen: 1,
+            currentSpace: 10,
+            settings: settings
+        )
+        XCTAssertEqual(result.map(\.id), [1, 2])
+    }
+
+    @MainActor
+    func testGroupedRaisePrefersTheVisibleSpace() {
+        let other = stubWindow(id: 1, onScreen: false)
+        let current = stubWindow(id: 2, onScreen: true)
+        let minimized = stubWindow(id: 3, minimized: true, onScreen: false)
+        XCTAssertEqual(WindowActions.windowToRaise(in: [other, current, minimized])?.id, 2)
+        XCTAssertEqual(WindowActions.windowToRaise(in: [other, minimized])?.id, 1)
+        XCTAssertEqual(WindowActions.windowToRaise(in: [minimized])?.id, 3)
     }
 
     @MainActor
@@ -449,6 +507,53 @@ final class TaskItemIconLayoutTests: XCTestCase {
         XCTAssertEqual(TaskItemView.badgeLength(iconLength: 50), 27)
     }
 
+    func testBadgePullsInsideTallTile() {
+        let tile = CGRect(x: 0, y: 0, width: 72, height: 62)
+        let iconLength = TaskItemView.iconLength(tileHeight: tile.height)
+        let icon = CGRect(
+            x: (tile.width - iconLength) / 2,
+            y: (tile.height - iconLength) / 2,
+            width: iconLength,
+            height: iconLength
+        )
+        let length = TaskItemView.badgeLength(iconLength: iconLength)
+        let frame = TaskItemView.badgeFrame(iconFrame: icon, in: tile, length: length)
+        XCTAssertTrue(tile.contains(frame))
+        XCTAssertEqual(frame.width, length)
+        XCTAssertEqual(frame.height, length)
+        XCTAssertEqual(frame.maxX, tile.maxX, accuracy: 0.001)
+        XCTAssertEqual(frame.maxY, tile.maxY, accuracy: 0.001)
+    }
+
+    func testBadgeKeepsIconCornerWhenItFits() {
+        let tile = CGRect(x: 0, y: 0, width: 48, height: 38)
+        let iconLength = TaskItemView.iconLength(tileHeight: tile.height)
+        let icon = CGRect(
+            x: (tile.width - iconLength) / 2,
+            y: (tile.height - iconLength) / 2,
+            width: iconLength,
+            height: iconLength
+        )
+        let length = TaskItemView.badgeLength(iconLength: iconLength)
+        let inset = length * (8 / 14)
+        let frame = TaskItemView.badgeFrame(iconFrame: icon, in: tile, length: length)
+        XCTAssertEqual(frame.minX, icon.maxX - inset, accuracy: 0.001)
+        XCTAssertEqual(frame.minY, icon.maxY - inset, accuracy: 0.001)
+        XCTAssertTrue(tile.contains(frame))
+    }
+
+    func testBadgePullsDownWithoutMovingLeftOnWideTile() {
+        let tile = CGRect(x: 0, y: 0, width: 200, height: 62)
+        let iconLength = TaskItemView.iconLength(tileHeight: tile.height)
+        let icon = CGRect(x: 8, y: (tile.height - iconLength) / 2, width: iconLength, height: iconLength)
+        let length = TaskItemView.badgeLength(iconLength: iconLength)
+        let inset = length * (8 / 14)
+        let frame = TaskItemView.badgeFrame(iconFrame: icon, in: tile, length: length)
+        XCTAssertEqual(frame.minX, icon.maxX - inset, accuracy: 0.001)
+        XCTAssertEqual(frame.maxY, tile.maxY, accuracy: 0.001)
+        XCTAssertTrue(tile.contains(frame))
+    }
+
     @MainActor
     func testCompactIconFillsTallerTiles() {
         let item = TaskItem(
@@ -462,6 +567,178 @@ final class TaskItemIconLayoutTests: XCTestCase {
         view.layoutSubtreeIfNeeded()
         let iconView = view.subviews.compactMap { $0 as? NSImageView }.first
         XCTAssertEqual(iconView?.frame.size, NSSize(width: 50, height: 50))
+    }
+
+    @MainActor
+    func testLaidOutBadgeStaysInsideTallTile() {
+        let item = TaskItem(
+            id: "pin-x",
+            kind: .pinned(bundleID: "x", appName: "X", icon: nil, badge: "1")
+        )
+        var settings = AppSettings.default
+        settings.iconOnly = true
+        let view = TaskItemView(item: item, settings: settings)
+        view.frame = NSRect(x: 0, y: 0, width: 72, height: 62)
+        view.layoutSubtreeIfNeeded()
+        let badge = view.subviews.first {
+            !($0 is NSImageView) && !($0 is NSTextField)
+                && $0.frame.width >= 14
+                && abs($0.frame.width - $0.frame.height) < 0.001
+        }
+        XCTAssertNotNil(badge)
+        let frame = badge?.frame ?? .zero
+        XCTAssertTrue(view.bounds.contains(frame))
+        XCTAssertEqual(frame.maxX, view.bounds.maxX, accuracy: 0.001)
+        XCTAssertEqual(frame.maxY, view.bounds.maxY, accuracy: 0.001)
+    }
+}
+
+final class RunningMarkTests: XCTestCase {
+    func testMarkCountFollowsGroupedWindows() {
+        XCTAssertEqual(WindowDotsView.markCount(windowCount: 0, grouped: true), 0)
+        XCTAssertEqual(WindowDotsView.markCount(windowCount: 1, grouped: true), 1)
+        XCTAssertEqual(WindowDotsView.markCount(windowCount: 2, grouped: true), 2)
+        XCTAssertEqual(WindowDotsView.markCount(windowCount: 3, grouped: true), 3)
+        XCTAssertEqual(WindowDotsView.markCount(windowCount: 6, grouped: true), 3)
+        XCTAssertEqual(WindowDotsView.markCount(windowCount: 4, grouped: false), 1)
+    }
+
+    func testSingleWindowKeepsThePill() {
+        let bounds = CGRect(x: 0, y: 0, width: 26, height: 6)
+        let active = WindowDotsView.markFrames(count: 1, active: true, in: bounds)
+        let idle = WindowDotsView.markFrames(count: 1, active: false, in: bounds)
+        XCTAssertEqual(active.count, 1)
+        XCTAssertEqual(active[0].width, 22, accuracy: 0.001)
+        XCTAssertEqual(active[0].height, 3, accuracy: 0.001)
+        XCTAssertEqual(idle[0].width, 12, accuracy: 0.001)
+        XCTAssertGreaterThan(active[0].width, idle[0].width)
+    }
+
+    func testTwoDotsSitUnderTheIcon() {
+        let bounds = CGRect(x: 0, y: 0, width: 38, height: 6)
+        let frames = WindowDotsView.markFrames(count: 2, active: true, in: bounds)
+        XCTAssertEqual(frames.count, 2)
+        XCTAssertEqual(frames[0].width, 4, accuracy: 0.001)
+        XCTAssertEqual(frames[0].width, frames[0].height, accuracy: 0.001)
+        XCTAssertEqual(frames[1].minX - frames[0].maxX, 3, accuracy: 0.001)
+        let span = frames[1].maxX - frames[0].minX
+        XCTAssertEqual(frames[0].minX, (bounds.width - span) / 2, accuracy: 0.001)
+    }
+
+    func testThreeDotsFitTheSmallestIcon() {
+        let bounds = CGRect(x: 0, y: 0, width: 16, height: 6)
+        let frames = WindowDotsView.markFrames(count: 5, active: false, in: bounds)
+        XCTAssertEqual(frames.count, 3)
+        XCTAssertGreaterThanOrEqual(frames[0].minX, 0)
+        XCTAssertLessThanOrEqual(frames[2].maxX, bounds.width + 0.001)
+        XCTAssertEqual(frames[0].width, frames[1].width, accuracy: 0.001)
+        XCTAssertEqual(frames[0].width, frames[0].height, accuracy: 0.001)
+        XCTAssertGreaterThan(frames[1].minX, frames[0].maxX)
+    }
+
+    @MainActor
+    func testGroupedTileShowsDotCount() {
+        var settings = AppSettings.default
+        settings.groupByApplication = true
+        let one = groupedItem(windowCount: 1)
+        let two = groupedItem(windowCount: 2)
+        let four = groupedItem(windowCount: 4)
+        XCTAssertEqual(markCount(for: one, settings: settings), 1)
+        XCTAssertEqual(markCount(for: two, settings: settings), 2)
+        XCTAssertEqual(markCount(for: four, settings: settings), 3)
+        XCTAssertFalse(dotsView(for: two, settings: settings).isHidden)
+
+        settings.groupByApplication = false
+        settings.iconOnly = true
+        let window = TaskItem(id: "w", kind: .window(stubWindow(id: 1)))
+        XCTAssertEqual(markCount(for: window, settings: settings), 1)
+        XCTAssertEqual(markCount(for: two, settings: settings), 1)
+
+        let pinned = TaskItem(
+            id: "pin-x",
+            kind: .pinned(bundleID: "x", appName: "X", icon: nil, badge: nil)
+        )
+        XCTAssertEqual(markCount(for: pinned, settings: AppSettings.default), 0)
+        XCTAssertTrue(dotsView(for: pinned, settings: AppSettings.default).isHidden)
+    }
+
+    @MainActor
+    func testDrawSplitsIntoSeparateDots() {
+        XCTAssertEqual(blueRuns(count: 1, active: true), 1)
+        XCTAssertEqual(blueRuns(count: 2, active: true), 2)
+        XCTAssertEqual(blueRuns(count: 3, active: false), 3)
+        XCTAssertEqual(blueRuns(count: 6, active: true), 3)
+    }
+
+    @MainActor
+    private func groupedItem(windowCount: Int) -> TaskItem {
+        let windows = (0..<windowCount).map { stubWindow(id: CGWindowID($0 + 1)) }
+        return TaskItem(
+            id: "group-x",
+            kind: .grouped(bundleID: "x", appName: "X", windows: windows, badge: nil)
+        )
+    }
+
+    @MainActor
+    private func dotsView(for item: TaskItem, settings: AppSettings) -> WindowDotsView {
+        let view = TaskItemView(item: item, settings: settings)
+        view.frame = NSRect(x: 0, y: 0, width: 50, height: 50)
+        view.layoutSubtreeIfNeeded()
+        return view.subviews.compactMap { $0 as? WindowDotsView }.first!
+    }
+
+    @MainActor
+    private func markCount(for item: TaskItem, settings: AppSettings) -> Int {
+        dotsView(for: item, settings: settings).count
+    }
+
+    @MainActor
+    private func blueRuns(count: Int, active: Bool) -> Int {
+        let view = WindowDotsView(frame: NSRect(x: 0, y: 0, width: 38, height: 6))
+        view.count = count
+        view.activeIndex = active ? 0 : nil
+        let scale = 2
+        let pixelsWide = 38 * scale
+        let pixelsHigh = 6 * scale
+        guard let rep = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: pixelsWide,
+            pixelsHigh: pixelsHigh,
+            bitsPerSample: 8,
+            samplesPerPixel: 4,
+            hasAlpha: true,
+            isPlanar: false,
+            colorSpaceName: .deviceRGB,
+            bytesPerRow: 0,
+            bitsPerPixel: 0
+        ) else {
+            return -1
+        }
+        rep.size = view.bounds.size
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+        view.draw(view.bounds)
+        NSGraphicsContext.restoreGraphicsState()
+
+        var best = 0
+        for y in 0..<pixelsHigh {
+            var runs = 0
+            var inside = false
+            for x in 0..<pixelsWide {
+                guard let color = rep.colorAt(x: x, y: y) else { continue }
+                let lit = color.alphaComponent > 0.15
+                    && color.blueComponent > color.redComponent + 0.05
+                    && color.blueComponent > 0.15
+                if lit && !inside {
+                    runs += 1
+                    inside = true
+                } else if !lit {
+                    inside = false
+                }
+            }
+            best = max(best, runs)
+        }
+        return best
     }
 }
 

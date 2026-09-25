@@ -80,6 +80,7 @@ final class OverlapResizer {
                     skipBundles: skip,
                     skippedPIDs: skippedPIDs
                 ) else { continue }
+                guard window.isOnScreen else { continue }
                 guard window.screenID == screen.displayID || settings.showWindowsFromAllScreens else { continue }
                 let cocoa = ScreenGeometry.cocoaRect(fromCGRect: window.frame)
                 guard let newHeight = OverlapGeometry.proposedHeight(windowCocoa: cocoa, bar: bar) else { continue }

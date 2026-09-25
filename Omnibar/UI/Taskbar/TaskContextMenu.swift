@@ -93,6 +93,11 @@ enum TaskContextMenu {
         allScreens.target = Target.shared
         menu.addItem(allScreens)
 
+        let allSpaces = NSMenuItem(title: "Show Windows From All Spaces", action: #selector(Target.toggleAllSpaces), keyEquivalent: "")
+        allSpaces.state = SettingsStore.shared.settings.showWindowsFromAllSpaces ? .on : .off
+        allSpaces.target = Target.shared
+        menu.addItem(allSpaces)
+
         menu.addItem(.separator())
         let reset = NSMenuItem(title: "Reset Settings", action: #selector(Target.reset), keyEquivalent: "")
         reset.target = Target.shared
@@ -121,6 +126,10 @@ enum TaskContextMenu {
 
         @objc func toggleAllScreens() {
             SettingsStore.shared.update { $0.showWindowsFromAllScreens.toggle() }
+        }
+
+        @objc func toggleAllSpaces() {
+            SettingsStore.shared.update { $0.showWindowsFromAllSpaces.toggle() }
         }
 
         @objc func reset() {

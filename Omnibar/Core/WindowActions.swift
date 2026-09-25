@@ -2,15 +2,33 @@ import AppKit
 import Foundation
 
 enum WindowActions {
+    private static var pendingFocusID: CGWindowID?
+
     static func raise(_ window: WindowInfo) {
-        activate(pid: window.pid)
-        if let element = element(for: window) {
-            if window.isMinimized {
-                AXBridge.setMinimized(element, false)
-            }
-            AXBridge.raise(element)
+        if focus(window) {
+            pendingFocusID = nil
+            return
         }
-        NSRunningApplication(processIdentifier: window.pid)?.activate(options: [.activateIgnoringOtherApps])
+        // Accessibility has no element until that Space is visible.
+        if CGSBridge.shared.revealSpace(forWindow: window.spaces) {
+            pendingFocusID = window.id
+        } else {
+            pendingFocusID = nil
+            activate(pid: window.pid)
+        }
+    }
+
+    /// Raises a window that was clicked on another Space, once a later scan can see it.
+    static func completePendingFocus(windows: [WindowInfo]) {
+        guard let id = pendingFocusID, let window = windows.first(where: { $0.id == id }) else { return }
+        guard focus(window) else { return }
+        pendingFocusID = nil
+    }
+
+    /// Prefer a window already on the visible Space, then any open window.
+    static func windowToRaise(in windows: [WindowInfo]) -> WindowInfo? {
+        let open = windows.filter { !$0.isMinimized && !$0.isHidden }
+        return open.first(where: \.isOnScreen) ?? open.first ?? windows.first
     }
 
     static func restack(frontToBack: [(id: CGWindowID, pid: pid_t)]) {
@@ -102,14 +120,25 @@ enum WindowActions {
                 } else {
                     minimize(active)
                 }
-            } else if let first = windows.first(where: { !$0.isMinimized && !$0.isHidden }) ?? windows.first {
-                raise(first)
+            } else if let window = windowToRaise(in: windows) {
+                raise(window)
             }
         }
     }
 
     static func handleMiddleClick(_ item: TaskItem) {
         newWindow(pid: item.pid, bundleID: item.bundleID)
+    }
+
+    @discardableResult
+    private static func focus(_ window: WindowInfo) -> Bool {
+        guard let element = element(for: window) else { return false }
+        activate(pid: window.pid)
+        if window.isMinimized {
+            AXBridge.setMinimized(element, false)
+        }
+        AXBridge.raise(element)
+        return true
     }
 
     private static func element(for window: WindowInfo) -> AXUIElement? {

@@ -43,6 +43,21 @@ nonisolated enum ScanGeometry {
             abs(cgFrame.width - size.width) < 4 && abs(cgFrame.height - size.height) < 4
         }
     }
+
+    /// Accessibility does not list these windows. A named window is kept even when
+    /// the window server reports an empty frame.
+    static func canListOffScreenWindow(layer: Int32, alpha: CGFloat, frame: CGRect, title: String) -> Bool {
+        guard layer == 0, alpha > 0 else { return false }
+        let sized = frame.width >= 40 && frame.height >= 40
+        let named = !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        return sized || named
+    }
+
+    /// True when the window belongs only to Spaces that are not visible on any display.
+    static func isAssignedOnlyToOtherSpaces(spaces: [UInt64], visibleSpaces: Set<UInt64>) -> Bool {
+        guard !spaces.isEmpty, !visibleSpaces.isEmpty else { return false }
+        return spaces.allSatisfy { !visibleSpaces.contains($0) }
+    }
 }
 
 nonisolated struct ScanCoalescer: Equatable {
@@ -211,7 +226,13 @@ actor WindowScanner {
             }
         }
 
-        let spaceMap = spaces.spaces(forWindowIDs: windows.map(\.id))
+        let foreign = offScreenCandidates(
+            cgByID: cgByID,
+            seen: seen,
+            onScreenIDs: onScreenIDs,
+            request: request
+        )
+        let spaceMap = spaces.spaces(forWindowIDs: windows.map(\.id) + foreign.map(\.id))
         windows = windows.map { window in
             WindowInfo(
                 id: window.id,
@@ -234,13 +255,48 @@ actor WindowScanner {
 
         let displayIDs = request.screens.map(\.displayID)
         let spaceState = spaces.displaySpaceState(displayIDs: displayIDs)
+        let visibleSpaces = Set(spaceState.current.values)
+        let screenPairs = request.screens.map { (id: $0.displayID, frame: $0.cocoaFrame) }
+        for candidate in foreign {
+            let windowSpaces = spaceMap[candidate.id] ?? []
+            guard ScanGeometry.isAssignedOnlyToOtherSpaces(
+                spaces: windowSpaces,
+                visibleSpaces: visibleSpaces
+            ) else { continue }
+            let fullscreen = ScanGeometry.looksLikeFullscreen(candidate.frame, screenSizes: screenSizes)
+                && windowSpaces.contains { spaces.isFullscreenSpace($0) }
+            windows.append(WindowInfo(
+                id: candidate.id,
+                pid: candidate.app.pid,
+                bundleID: candidate.app.bundleID,
+                appName: candidate.app.appName,
+                title: candidate.title,
+                frame: candidate.frame,
+                screenID: ScreenGeometry.displayID(
+                    containingCGRect: candidate.frame,
+                    screens: screenPairs,
+                    cocoaPrimaryHeight: request.cocoaPrimaryHeight
+                ),
+                spaces: windowSpaces,
+                isMinimized: false,
+                isHidden: candidate.app.isHidden,
+                isFullscreen: fullscreen,
+                isOnScreen: false,
+                isTabbed: false,
+                isActive: false,
+                layer: candidate.layer
+            ))
+        }
 
-        evict(keeping: seen)
-        elementByWindowID = liveElements
+        let listed = Set(windows.map(\.id))
+        evict(keeping: listed)
+        for (id, element) in liveElements {
+            elementByWindowID[id] = element
+        }
 
         var elements: [CGWindowID: AXElementRef] = [:]
-        elements.reserveCapacity(liveElements.count)
-        for (id, element) in liveElements {
+        elements.reserveCapacity(elementByWindowID.count)
+        for (id, element) in elementByWindowID {
             elements[id] = AXElementRef(element)
         }
 
@@ -270,6 +326,58 @@ actor WindowScanner {
             }
         }
         return result
+    }
+
+    private struct OffScreenCandidate {
+        var id: CGWindowID
+        var app: ScanRequest.App
+        var title: String
+        var frame: CGRect
+        var layer: Int32
+    }
+
+    /// Layer-0 windows Accessibility did not return. Inactive Spaces are identified
+    /// later, once SkyLight has mapped each window id.
+    private func offScreenCandidates(
+        cgByID: [CGWindowID: [String: Any]],
+        seen: Set<CGWindowID>,
+        onScreenIDs: Set<CGWindowID>,
+        request: ScanRequest
+    ) -> [OffScreenCandidate] {
+        var eligible: [pid_t: ScanRequest.App] = [:]
+        for app in request.apps {
+            if let bundleID = app.bundleID,
+               request.ignoredBundleIDs.contains(bundleID) || request.blacklist.contains(bundleID) {
+                continue
+            }
+            eligible[app.pid] = app
+        }
+        var foreign: [OffScreenCandidate] = []
+        for (id, info) in cgByID {
+            if seen.contains(id) || onScreenIDs.contains(id) { continue }
+            let pid = pid_t((info[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value ?? 0)
+            guard let app = eligible[pid] else { continue }
+            let layer = (info[kCGWindowLayer as String] as? NSNumber)?.int32Value ?? 0
+            let alpha = (info[kCGWindowAlpha as String] as? NSNumber)?.doubleValue ?? 1
+            let title = info[kCGWindowName as String] as? String ?? ""
+            let frame = Self.cgBounds(info)
+            guard ScanGeometry.canListOffScreenWindow(layer: layer, alpha: alpha, frame: frame, title: title) else {
+                continue
+            }
+            foreign.append(OffScreenCandidate(id: id, app: app, title: title, frame: frame, layer: layer))
+        }
+        foreign.sort { $0.id < $1.id }
+        return foreign
+    }
+
+    private static func cgBounds(_ info: [String: Any]) -> CGRect {
+        guard let bounds = info[kCGWindowBounds as String] as? [String: CGFloat] else { return .zero }
+        return CGRect(
+            x: bounds["X"] ?? 0,
+            y: bounds["Y"] ?? 0,
+            width: bounds["Width"] ?? 0,
+            height: bounds["Height"] ?? 0
+        )
     }
 
     private func cachedWindow(for element: AXUIElement) -> CachedWindow? {

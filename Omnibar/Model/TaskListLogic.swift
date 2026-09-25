@@ -17,16 +17,22 @@ enum TaskListLogic {
         settings: AppSettings
     ) -> [WindowInfo] {
         var filtered = windows.filter { window in
-            if settings.showWindowsFromAllScreens {
+            if Self.onThisTaskbarSpace(window, screenID: screenID, currentSpace: currentSpace) {
                 return true
             }
-            if window.isMinimized {
-                return window.screenID == screenID || window.screenID == nil
+            // All screens keeps every display's visible Space. All Spaces adds
+            // desktops that are not visible. Together they list every window.
+            let onThisScreen = window.screenID == screenID || window.screenID == nil
+            if settings.showWindowsFromAllSpaces && settings.showWindowsFromAllScreens {
+                return true
             }
-            if let currentSpace, !window.spaces.isEmpty {
-                return window.spaces.contains(currentSpace)
+            if settings.showWindowsFromAllSpaces && onThisScreen {
+                return true
             }
-            return window.screenID == screenID || window.screenID == nil
+            if settings.showWindowsFromAllScreens && (window.isOnScreen || window.isMinimized) {
+                return true
+            }
+            return false
         }
 
         if !settings.showTabsAsItems {
@@ -39,6 +45,23 @@ enum TaskListLogic {
             }
         }
         return filtered
+    }
+
+    /// Minimized windows stay on their last screen. Everyone else must belong to
+    /// this display's current Space, or to this screen when Space ids are missing.
+    static func onThisTaskbarSpace(
+        _ window: WindowInfo,
+        screenID: CGDirectDisplayID,
+        currentSpace: UInt64?
+    ) -> Bool {
+        let onThisScreen = window.screenID == screenID || window.screenID == nil
+        if window.isMinimized {
+            return onThisScreen
+        }
+        if let currentSpace, !window.spaces.isEmpty {
+            return window.spaces.contains(currentSpace)
+        }
+        return onThisScreen
     }
 
     static func items(

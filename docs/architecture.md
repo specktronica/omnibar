@@ -51,11 +51,11 @@ flowchart LR
 - screen parameter changes, settings/pins/blacklist/badge notifications
 - a repeating poll (`pollInterval`, minimum 0.5 s)
 
-`WindowScanner` (an actor) builds `WindowInfo` from Accessibility windows crossed with `CGWindowListCopyWindowInfo`. It keeps layer-0 windows of regular apps, skips a hard-coded system set and the blacklist, drops untitled floating windows (`AXFloatingWindow` / `AXSystemFloatingWindow` with an empty title), and drops frames smaller than 40×40 points.
+`WindowScanner` (an actor) builds `WindowInfo` from Accessibility windows crossed with `CGWindowListCopyWindowInfo`. It keeps layer-0 windows of regular apps, skips a hard-coded system set and the blacklist, drops untitled floating windows (`AXFloatingWindow` / `AXSystemFloatingWindow` with an empty title), and drops frames smaller than 40×40 points. Accessibility only returns the visible Space, so the scanner also keeps layer-0 windows from the window list whose SkyLight Spaces are not visible.
 
 Space membership and “this display is a fullscreen Space” come from private SkyLight symbols loaded in `CGSBridge` (`CGSCopyManagedDisplaySpaces` / `SLS…` and related). `TaskListLogic` then:
 
-- filters to the current Space (unless “show windows from all screens”); minimized windows remain on their last screen
+- filters to the current Space. “Show windows from all screens” adds windows visible on other displays. “Show windows from all Spaces” adds this display’s other desktops; with both on, every window is listed. Minimized windows remain on their last screen
 - optionally collapses same-title tabs
 - groups by application or emits one tile per window
 - inserts pinned launchers for bundle IDs with no open windows

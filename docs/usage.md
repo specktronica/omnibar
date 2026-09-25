@@ -1,6 +1,6 @@
 # Usage
 
-Omnibar is a bottom-of-screen taskbar. It lists windows on the current Space (minimized windows stay on their last screen), optional pinned apps, and a Start button. Tiles are grouped by application by default. There is no Dock icon while it is running, except during first-run onboarding.
+Omnibar is a bottom-of-screen taskbar. It lists windows on the current Space (minimized windows stay on their last screen), optional pinned apps, and a Start button. **Show windows from all Spaces** also lists windows on other desktops. Tiles are grouped by application by default. There is no Dock icon while it is running, except during first-run onboarding.
 
 ## First launch
 
@@ -25,13 +25,13 @@ Each display gets its own bar unless Settings hide that display or restrict the 
 | Control + Option | Close the Start Menu if it is open. Press and release to open it on the display under the pointer |
 | Click the Show desktop slice (far right) | Minimize all windows on the current Spaces; click again to restore |
 
-In icons-only or grouped mode, a compact tile draws a running mark under the icon (wider when that app is active). Clicking a grouped tile raises a non-minimized window, or minimizes/hides if one of the group is already active.
+In icons-only or grouped mode, a compact tile draws a blue running mark under the icon (wider when that app is active). A grouped app with two windows draws two dots, and three or more windows draw three. Clicking a grouped tile raises a non-minimized window on the current Space when there is one, otherwise a window on another Space, or minimizes/hides if one of the group is already active. A click on a window in another Space switches to that Space.
 
 ### Window menu
 
 Right-click a tile:
 
-- **Taskbar** submenu: Settings, hide the bar on this display, show windows from all screens, reset settings, quit Omnibar
+- **Taskbar** submenu: Settings, hide the bar on this display, show windows from all screens, show windows from all Spaces, reset settings, quit Omnibar
 - **Keep in Taskbar** — pin by bundle ID (stays on the bar when the app has no windows)
 - **New Window**, **Hide**, **Add to Blacklist**, **Quit**
 - **Fullscreen**, **Minimize**, **Close**
@@ -39,7 +39,7 @@ Right-click a tile:
 
 ### Hover thumbnails
 
-The popover shows up to three cards at a time and pages when a group has more. Live captures need Screen Recording; otherwise the card uses the app icon. Cards have close / minimize / zoom (Option or a fullscreen window uses fullscreen instead of zoom). Hovering a card can temporarily raise that window; leaving the popover restores the previous front window unless you clicked a card.
+The popover shows up to three cards at a time and pages when a group has more. Live captures need Screen Recording; otherwise the card uses the app icon. Cards have close / minimize / zoom (Option or a fullscreen window uses fullscreen instead of zoom). Hovering a card temporarily raises that window when it is already on screen. A minimized or hidden window stays that way until the card is clicked. Leaving the popover restores the previous front window unless you clicked a card.
 
 ## Start Menu
 
@@ -85,7 +85,7 @@ Open from the menu extra, the taskbar **Taskbar → Settings…** item, or by re
 | Behavior | Group by application, show tabs as items, indicate minimized/hidden, hide instead of minimize on click, Show desktop button, drag reorder, keep order across Space changes, auto-resize overlapping windows |
 | Tiling | Keyboard tiling on/off, modifier set (Control + Option, Control, Control + Command, Control + Option + Command), current shortcuts, Mission Control note when Control alone is selected |
 | Thumbnails | Hover delay, size, title in thumbnail, request Screen Recording |
-| Displays | Main display only, show windows from all screens, per-display visibility |
+| Displays | Main display only, show windows from all screens, show windows from all Spaces, per-display visibility |
 | Start Menu | Start button action, recent-apps count, Control + Option shortcut |
 | Apps | Pinned bundle IDs and blacklist |
 | Advanced | Window-list poll interval, overlap-resize skip list, reset to defaults |
@@ -112,6 +112,7 @@ Reset to defaults restores `AppSettings.default` except **Launch at login**, whi
 | Thumbnail size | 240 (140–420) |
 | Show window title in thumbnail | off |
 | Show windows from all screens | off |
+| Show windows from all Spaces | off |
 | Main display only | off |
 | Auto-resize overlapping windows | on |
 | Keep order across Space change | on |

@@ -17,6 +17,15 @@ final class ThumbnailPagingTests: XCTestCase {
         XCTAssertEqual(ThumbnailPaging.initialOffset(activeIndex: 0, windowCount: 2), 0)
     }
 
+    func testHoverPeekSkipsMinimizedAndHiddenWindows() {
+        XCTAssertTrue(ThumbnailHoverFocus.shouldTemporarilyRaise(stubWindow(id: 1)))
+        XCTAssertFalse(ThumbnailHoverFocus.shouldTemporarilyRaise(stubWindow(id: 2, minimized: true)))
+        XCTAssertFalse(ThumbnailHoverFocus.shouldTemporarilyRaise(stubWindow(id: 3, hidden: true)))
+        XCTAssertFalse(
+            ThumbnailHoverFocus.shouldTemporarilyRaise(stubWindow(id: 4, minimized: true, hidden: true))
+        )
+    }
+
     func testPageClamps() {
         XCTAssertEqual(ThumbnailPaging.page(offset: 0, delta: -1, windowCount: 5), 0)
         XCTAssertEqual(ThumbnailPaging.page(offset: 0, delta: 1, windowCount: 5), 1)

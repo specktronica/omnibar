@@ -1,6 +1,14 @@
 import AppKit
 import Foundation
 
+enum ThumbnailHoverFocus {
+    /// Peek only windows already on screen. Raising a minimized or hidden
+    /// window would restore it; a click on the card still does that.
+    static func shouldTemporarilyRaise(_ window: WindowInfo) -> Bool {
+        !window.isMinimized && !window.isHidden
+    }
+}
+
 enum ThumbnailPaging {
     static let maxVisibleCards = 3
 
@@ -217,6 +225,11 @@ final class ThumbnailPopover: NSPanel {
     }
 
     private func focusHoveredPreview(_ window: WindowInfo) {
+        guard ThumbnailHoverFocus.shouldTemporarilyRaise(window) else {
+            hoverFocusWork?.cancel()
+            hoverFocusWork = nil
+            return
+        }
         restoreWork?.cancel()
         restoreWork = nil
         guard window.id != hoverFocusedWindowID else { return }

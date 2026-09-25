@@ -28,6 +28,20 @@ final class TaskContextMenuTests: XCTestCase {
         XCTAssertEqual(menuItem(named: "Close", in: menu)?.isEnabled, true)
     }
 
+    func testTaskbarMenuListsAllSpacesNextToAllScreens() {
+        let window = stubWindow(id: 1)
+        let item = TaskItem(id: window.orderKey, kind: .window(window))
+        let menu = TaskContextMenu.build(item: item, displayID: 1)
+        let titles = menu.items.first { $0.title == "Taskbar" }?.submenu?.items.map(\.title) ?? []
+        let screens = titles.firstIndex(of: "Show Windows From All Screens")
+        let spaces = titles.firstIndex(of: "Show Windows From All Spaces")
+        XCTAssertNotNil(screens)
+        XCTAssertNotNil(spaces)
+        if let screens, let spaces {
+            XCTAssertLessThan(screens, spaces)
+        }
+    }
+
     func testGroupedWindowsAddSubmenuItems() {
         let first = stubWindow(id: 1, title: "One", active: true)
         let second = stubWindow(id: 2, title: "Two", active: false)

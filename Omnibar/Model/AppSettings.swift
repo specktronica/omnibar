@@ -32,6 +32,9 @@ struct AppSettings: Codable, Equatable, Sendable {
     var thumbnailSize: Double = 240
     var showTitleInThumbnail: Bool = false
     var showWindowsFromAllScreens: Bool = false
+    /// Windows on desktops that are not currently visible. Independent of
+    /// `showWindowsFromAllScreens`; both together list every display and Space.
+    var showWindowsFromAllSpaces: Bool = false
     var mainDisplayOnly: Bool = false
     var hiddenDisplayIDs: [UInt32] = []
     var autoResizeOverlapping: Bool = true
@@ -90,6 +93,7 @@ extension AppSettings {
         case thumbnailSize
         case showTitleInThumbnail
         case showWindowsFromAllScreens
+        case showWindowsFromAllSpaces
         case mainDisplayOnly
         case hiddenDisplayIDs
         case autoResizeOverlapping
@@ -132,6 +136,8 @@ extension AppSettings {
             ?? defaults.showTitleInThumbnail
         showWindowsFromAllScreens = try container.decodeIfPresent(Bool.self, forKey: .showWindowsFromAllScreens)
             ?? defaults.showWindowsFromAllScreens
+        showWindowsFromAllSpaces = try container.decodeIfPresent(Bool.self, forKey: .showWindowsFromAllSpaces)
+            ?? defaults.showWindowsFromAllSpaces
         mainDisplayOnly = try container.decodeIfPresent(Bool.self, forKey: .mainDisplayOnly) ?? defaults.mainDisplayOnly
         hiddenDisplayIDs = try container.decodeIfPresent([UInt32].self, forKey: .hiddenDisplayIDs)
             ?? defaults.hiddenDisplayIDs
