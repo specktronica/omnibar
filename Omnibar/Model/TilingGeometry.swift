@@ -146,7 +146,10 @@ nonisolated enum TilingGeometry {
     /// 1. The window's frame matches a tile in the direction's sequence: advance.
     /// 2. The frame matches what the app produced the last time a tile in the
     ///    sequence was applied (size clamped by the app): advance from that tile.
-    /// 3. Otherwise start the sequence from the half.
+    /// 3. A quarter slides to the adjacent quarter: down and up keep the column,
+    ///    left and right keep the row. A clamped quarter is recognized from the
+    ///    last applied tile.
+    /// 4. Otherwise start the sequence from the half.
     static func nextTile(
         direction: TileDirection,
         currentFrame: CGRect,
@@ -165,7 +168,49 @@ nonisolated enum TilingGeometry {
            framesMatch(remembered.frame, currentFrame, tolerance: tolerance) {
             return sequence[(index + 1) % sequence.count]
         }
+        if let slid = slidQuarter(
+            direction: direction,
+            currentFrame: currentFrame,
+            usable: usable,
+            remembered: remembered,
+            tolerance: tolerance
+        ) {
+            return slid
+        }
         return sequence[0]
+    }
+
+    /// A quarter moves to the neighbor that shares its row or column.
+    /// Full-width rows and full-height columns are not quarters and return nil.
+    private static func slidQuarter(
+        direction: TileDirection,
+        currentFrame: CGRect,
+        usable: CGRect,
+        remembered: AppliedTile?,
+        tolerance: CGFloat
+    ) -> Tile? {
+        let moves: [(Tile, Tile)]
+        switch direction {
+        case .down:
+            moves = [(.topLeft, .bottomLeft), (.topRight, .bottomRight)]
+        case .up:
+            moves = [(.bottomLeft, .topLeft), (.bottomRight, .topRight)]
+        case .right:
+            moves = [(.topLeft, .topRight), (.bottomLeft, .bottomRight)]
+        case .left:
+            moves = [(.topRight, .topLeft), (.bottomRight, .bottomLeft)]
+        }
+        for (source, destination) in moves {
+            if framesMatch(source.frame(in: usable), currentFrame, tolerance: tolerance) {
+                return destination
+            }
+        }
+        if let remembered,
+           framesMatch(remembered.frame, currentFrame, tolerance: tolerance),
+           let destination = moves.first(where: { $0.0 == remembered.tile })?.1 {
+            return destination
+        }
+        return nil
     }
 
     static func framesMatch(_ lhs: CGRect, _ rhs: CGRect, tolerance: CGFloat = frameTolerance) -> Bool {

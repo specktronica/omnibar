@@ -57,60 +57,60 @@ final class DockOrientationTests: XCTestCase {
     }
 }
 
-final class DockStripHidingTests: XCTestCase {
-    func testIgnoresWallpaperWindows() {
-        XCTAssertFalse(DockStripHiding.isStrip(name: "Wallpaper-", layer: DockStripHiding.dockWindowLevel))
-        XCTAssertFalse(DockStripHiding.isStrip(
-            name: "Wallpaper-EC12A353-7677-45AC-841C-92E9F356958E",
-            layer: DockStripHiding.dockWindowLevel
-        ))
-    }
-
-    func testMatchesDockStripLayer() {
-        XCTAssertTrue(DockStripHiding.isStrip(name: "Dock", layer: DockStripHiding.dockWindowLevel))
-        XCTAssertTrue(DockStripHiding.isStrip(name: "", layer: DockStripHiding.dockWindowLevel))
-        XCTAssertFalse(DockStripHiding.isStrip(name: "Dock", layer: 18))
-        XCTAssertFalse(DockStripHiding.isStrip(name: "", layer: 18))
-    }
-
-    func testStripWindowIDsFiltersByPIDAndLayer() {
-        let dockPID: pid_t = 39252
-        let windows: [[String: Any]] = [
-            [
-                kCGWindowOwnerPID as String: NSNumber(value: dockPID),
-                kCGWindowName as String: "Dock",
-                kCGWindowLayer as String: NSNumber(value: DockStripHiding.dockWindowLevel),
-                kCGWindowNumber as String: NSNumber(value: 100)
-            ],
-            [
-                kCGWindowOwnerPID as String: NSNumber(value: dockPID),
-                kCGWindowName as String: "",
-                kCGWindowLayer as String: NSNumber(value: DockStripHiding.dockWindowLevel),
-                kCGWindowNumber as String: NSNumber(value: 101)
-            ],
-            [
-                kCGWindowOwnerPID as String: NSNumber(value: dockPID),
-                kCGWindowName as String: "",
-                kCGWindowLayer as String: NSNumber(value: 18),
-                kCGWindowNumber as String: NSNumber(value: 102)
-            ],
-            [
-                kCGWindowOwnerPID as String: NSNumber(value: dockPID),
-                kCGWindowName as String: "Wallpaper-",
-                kCGWindowLayer as String: NSNumber(value: DockStripHiding.dockWindowLevel),
-                kCGWindowNumber as String: NSNumber(value: 103)
-            ],
-            [
-                kCGWindowOwnerPID as String: NSNumber(value: 1),
-                kCGWindowName as String: "Dock",
-                kCGWindowLayer as String: NSNumber(value: DockStripHiding.dockWindowLevel),
-                kCGWindowNumber as String: NSNumber(value: 104)
-            ]
-        ]
-        XCTAssertEqual(
-            DockStripHiding.stripWindowIDs(from: windows, dockPID: dockPID),
-            [CGWindowID(100), CGWindowID(101)]
+final class DockRelocationTests: XCTestCase {
+    func testPlacedOnRightHidesAndKeepsTiming() {
+        let original = DockPreferences(
+            autohide: false,
+            autohideDelay: 0.4,
+            autohideTimeModifier: 1.2,
+            orientation: "bottom"
         )
+        let placed = DockRelocation.placedOnRight(original)
+        XCTAssertEqual(placed.orientation, DockOrientation.right)
+        XCTAssertTrue(placed.autohide)
+        XCTAssertEqual(placed.autohideDelay, 0.4, accuracy: 0.001)
+        XCTAssertEqual(placed.autohideTimeModifier, 1.2, accuracy: 0.001)
+    }
+
+    func testPlacedOnRightClearsLegacyHiddenDelay() {
+        let original = DockPreferences(
+            autohide: true,
+            autohideDelay: DockRelocation.legacyHiddenDelay,
+            autohideTimeModifier: 0,
+            orientation: "top"
+        )
+        let placed = DockRelocation.placedOnRight(original)
+        XCTAssertTrue(placed.autohide)
+        XCTAssertEqual(placed.orientation, DockOrientation.right)
+        XCTAssertEqual(placed.autohideDelay, DockPreferences.standardDelay, accuracy: 0.001)
+        XCTAssertEqual(placed.autohideTimeModifier, DockPreferences.standardTimeModifier, accuracy: 0.001)
+    }
+
+    func testLegacyHiddenSignatureRestoresABottomDock() {
+        let live = DockPreferences(
+            autohide: true,
+            autohideDelay: DockRelocation.legacyHiddenDelay,
+            autohideTimeModifier: 0,
+            orientation: "top"
+        )
+        XCTAssertTrue(DockRelocation.isLegacyHiddenSignature(delay: live.autohideDelay, orientation: live.orientation))
+        let backup = DockRelocation.backup(from: live)
+        XCTAssertEqual(backup.orientation, DockOrientation.bottom)
+        XCTAssertEqual(backup.autohideDelay, DockPreferences.standardDelay, accuracy: 0.001)
+        XCTAssertEqual(backup.autohideTimeModifier, DockPreferences.standardTimeModifier, accuracy: 0.001)
+        XCTAssertTrue(backup.autohide)
+        XCTAssertEqual(DockRelocation.placedOnRight(backup).orientation, DockOrientation.right)
+    }
+
+    func testOrdinaryTopDockIsPreservedInTheBackup() {
+        let live = DockPreferences(
+            autohide: false,
+            autohideDelay: 0.5,
+            autohideTimeModifier: 1,
+            orientation: "top"
+        )
+        XCTAssertFalse(DockRelocation.isLegacyHiddenSignature(delay: live.autohideDelay, orientation: live.orientation))
+        XCTAssertEqual(DockRelocation.backup(from: live), live)
     }
 }
 
@@ -141,8 +141,8 @@ final class SettingsTests: XCTestCase {
     }
 
     @MainActor
-    func testFullyHideDockDefaultsOn() {
-        XCTAssertTrue(AppSettings.default.fullyHideDock)
+    func testMoveDockToRightDefaultsOn() {
+        XCTAssertTrue(AppSettings.default.moveDockToRight)
     }
 
     @MainActor

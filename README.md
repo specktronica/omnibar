@@ -38,9 +38,9 @@ Quit Omnibar first so it can restore the Dock. Then:
 brew uninstall --cask --zap specktronica/omnibar/omnibar
 ```
 
-`--zap` removes the app, login item, prefs, and caches. It does not reset TCC, untap `specktronica/omnibar`, or delete Xcode DerivedData copies. If Omnibar is already quit, zap can delete the Dock backup without restoring it (Dock stuck at the top with a long autohide delay).
+`--zap` removes the app, login item, prefs, and caches. It does not reset TCC, untap `specktronica/omnibar`, or delete Xcode DerivedData copies. If Omnibar is already quit, zap can delete the Dock backup without restoring it (Dock left hidden on the right edge, or, from an older build, stuck at the top with a long autohide delay).
 
-From a clone, `make remove` is the full cleanup: it restores the Dock from `omnibar.dock.backup.v1` or the fully-hidden signature even when the app is not running, deletes `/Applications/Omnibar.app`, `~/Applications/Omnibar.app`, and Xcode DerivedData `Omnibar.app` products, uninstalls the Homebrew cask, untaps `specktronica/omnibar`, unregisters leftover Launch Services copies, removes preferences and caches, resets Accessibility and Screen Recording grants, and deletes the login item. Repo build products (`build/Omnibar.app`, `build/DerivedData`) are left in place.
+From a clone, `make remove` is the full cleanup: it restores the Dock from `omnibar.dock.backup.v1` or the older fully-hidden signature even when the app is not running, deletes `/Applications/Omnibar.app`, `~/Applications/Omnibar.app`, and Xcode DerivedData `Omnibar.app` products, uninstalls the Homebrew cask, untaps `specktronica/omnibar`, unregisters leftover Launch Services copies, removes preferences and caches, resets Accessibility and Screen Recording grants, and deletes the login item. Repo build products (`build/Omnibar.app`, `build/DerivedData`) are left in place.
 
 ## Build
 
@@ -104,8 +104,8 @@ Signing, TCC, and tests are covered in [docs/development.md](docs/development.md
 - Spaces: show windows on the current Space (minimized windows stay on their last screen); hide the bar in fullscreen Spaces
 - Drag to reorder, group by application, icons-only mode
 - Multi-monitor: one bar per screen, main-display-only, hide per display
-- Window tiling: ⌃⌥← / ⌃⌥→ for halves and quarters, ⌃⌥↑ / ⌃⌥↓ for top or bottom half then maximize (press again to cycle); tiles stay above the bar
-- Auto-resize overlapping windows, fully hide Dock (moved to the top, including Mission Control, reverted on quit), auto-hide the bar
+- Window tiling: ⌃⌥← / ⌃⌥→ for halves and quarters, ⌃⌥↑ / ⌃⌥↓ for halves then maximize, with arrow keys sliding a quarter tile to the neighbor in the same row or column; tiles stay above the bar
+- Auto-resize overlapping windows, move the Dock to the right edge as a hidden vertical Dock (reverted on quit), auto-hide the bar
 
 See [docs/usage.md](docs/usage.md) for clicks, menus, and every Settings pane.
 
@@ -128,7 +128,7 @@ Ethereum (mainnet):
 ## Known limitations
 
 - Space membership and fullscreen detection use private SkyLight / CGS symbols (`CGSCopyManagedDisplaySpaces`, `CGSCopySpacesForWindows`, and related). Those can change with macOS releases.
-- Fully hiding the Dock moves it to the top (so it cannot share Omnibar's edge) and uses `CGSSetWindowLevel` on Dock strip windows during Mission Control. Autohide delay alone cannot hide that strip; it is part of Mission Control's overlay.
+- Moving the Dock to the right and hiding it writes the `com.apple.dock` orientation and autohide preferences, then restarts the Dock. The hidden Dock slides in from the right edge and can cover the end of the taskbar. Quit restores the previous edge and autohide setting. A force-quit can leave the Dock hidden on the right until the setting is turned off or `make remove` runs.
 - Launchpad was removed on some macOS 26 installs. If Launchpad cannot be opened, the Start button falls back to Spotlight.
 - Ad-hoc signed local builds are not notarized and are not sandboxed. Accessibility and screen capture need the unsandboxed app.
 - Window IDs are not stable across logout. Pin order is persisted; in-session window order is not.

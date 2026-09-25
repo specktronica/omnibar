@@ -181,26 +181,35 @@ final class TaskbarPanel: NSPanel {
         ShowDesktopController.shared.toggle()
     }
 
+    var isStartMenuVisible: Bool { startMenu.isVisible }
+
+    func presentStartMenu() {
+        guard !isSuppressed else { return }
+        setAutoHidden(false)
+        guard !startMenu.isVisible else { return }
+        let button = taskbarView.convert(taskbarView.startButtonFrame(), to: nil)
+        let rect = convertToScreen(button)
+        startMenu.present(from: rect, screen: currentScreen)
+    }
+
+    func dismissStartMenu(restoreFrontApp: Bool = false) {
+        startMenu.dismiss(restoreFrontApp: restoreFrontApp)
+    }
+
     private func handleStartLeftClick() {
         switch SettingsStore.shared.settings.startButtonAction {
         case .startMenu:
-            toggleStartMenu()
+            if startMenu.isVisible {
+                dismissStartMenu()
+            } else {
+                presentStartMenu()
+            }
         case .launchpad:
             taskbarView.spinStartButton(opening: true)
             StartMenuPanel.openLaunchpad()
         case .spotlight:
             taskbarView.spinStartButton(opening: true)
             StartMenuPanel.openSpotlight()
-        }
-    }
-
-    private func toggleStartMenu() {
-        if startMenu.isVisible {
-            startMenu.dismiss()
-        } else {
-            let button = taskbarView.convert(taskbarView.startButtonFrame(), to: nil)
-            let rect = convertToScreen(button)
-            startMenu.present(from: rect, screen: currentScreen)
         }
     }
 

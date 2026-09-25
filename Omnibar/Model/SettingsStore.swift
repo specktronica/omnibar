@@ -20,7 +20,7 @@ final class SettingsStore {
             if oldValue.launchAtLogin != settings.launchAtLogin {
                 syncLoginItem(settings.launchAtLogin)
             }
-            if oldValue.fullyHideDock != settings.fullyHideDock {
+            if oldValue.moveDockToRight != settings.moveDockToRight {
                 applyDockFromSettings()
             }
         }

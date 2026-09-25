@@ -114,7 +114,7 @@ private struct GeneralPane: View {
     var body: some View {
         Form {
             Toggle("Launch at login", isOn: $settings.launchAtLogin)
-            Toggle("Fully hide Dock", isOn: $settings.fullyHideDock)
+            Toggle("Hide the Dock on the right", isOn: $settings.moveDockToRight)
             Toggle("Auto-hide Taskbar", isOn: $settings.autoHide)
             Picker("Start button", selection: $settings.startButtonAction) {
                 ForEach(StartButtonAction.allCases) { action in
@@ -270,13 +270,13 @@ private struct TilingPane: View {
             LabeledContent("Tile right", value: "\(settings.tilingModifiers.symbol)→")
             LabeledContent("Tile up", value: "\(settings.tilingModifiers.symbol)↑")
             LabeledContent("Tile down", value: "\(settings.tilingModifiers.symbol)↓")
-            Text("Left/right: press again to cycle half → top quarter → bottom quarter → half.")
+            Text("Left/right: a quarter moves to the other side of the same row. Otherwise, press again to cycle half → top quarter → bottom quarter → half.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            Text("Up: press again to fill the usable area, then back to the top half.")
+            Text("Up: a bottom quarter moves to the top quarter in the same column. Otherwise, top half, then the full usable area.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            Text("Down: press again to fill the usable area, then back to the bottom half.")
+            Text("Down: a top quarter moves to the bottom quarter in the same column. Otherwise, bottom half, then the full usable area.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
             if settings.tilingModifiers.conflictsWithMissionControl {
@@ -356,6 +356,9 @@ private struct StartMenuPane: View {
             }
             Stepper("Recent apps: \(settings.recentAppsLimit)", value: $settings.recentAppsLimit, in: 3...20)
             Text("Right-click the Start button on the Taskbar to change the default action.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text("Press Control + Option to close the Start Menu. Press those keys and release them to open it.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }

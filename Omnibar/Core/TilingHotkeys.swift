@@ -137,6 +137,9 @@ final class TilingHotkeys {
     }
 
     fileprivate func handle(hotKeyID: UInt32) {
+        // The chord is already armed by the earlier flagsChanged event. Cancel
+        // it before tiling so releasing Control+Option does not open the menu.
+        StartMenuHotkey.shared.noteOtherInput()
         guard let key = HotKey(rawValue: hotKeyID) else { return }
         WindowTiler.shared.tileFocusedWindow(key.direction)
     }

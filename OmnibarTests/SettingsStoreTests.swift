@@ -72,7 +72,7 @@ final class SettingsStoreTests: XCTestCase {
     }
 
     @MainActor
-    func testFullyHideDockChangeUsesHookNotDockManager() {
+    func testMoveDockToRightChangeUsesHookNotDockManager() {
         var applied = 0
         let store = SettingsStore(
             defaults: isolated.defaults,
@@ -80,7 +80,7 @@ final class SettingsStoreTests: XCTestCase {
             applyDockFromSettings: { applied += 1 },
             revertDock: {}
         )
-        store.update { $0.fullyHideDock = false }
+        store.update { $0.moveDockToRight = false }
         XCTAssertEqual(applied, 1)
     }
 }

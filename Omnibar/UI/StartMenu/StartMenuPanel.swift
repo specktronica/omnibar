@@ -21,6 +21,8 @@ final class StartMenuPanel: NSPanel {
     private var lastRecentIDs: [String] = []
     private var pendingSearchFocus = false
     private var presentedAt: TimeInterval = 0
+    /// Frontmost app when the menu opened. A shortcut dismiss hands the keyboard back.
+    private var frontAppOnPresent: NSRunningApplication?
 
     init() {
         super.init(
@@ -86,12 +88,17 @@ final class StartMenuPanel: NSPanel {
     override var canBecomeKey: Bool { true }
 
     func present(from startButton: NSRect, screen: NSScreen) {
+        rememberFrontApp()
         startButtonScreenRect = startButton
         presentedAt = NSApp.currentEvent?.timestamp ?? ProcessInfo.processInfo.systemUptime
         let size = NSSize(width: 640, height: min(520, screen.visibleFrame.height - 80))
         var origin = NSPoint(x: startButton.minX, y: startButton.maxY + 8)
-        if origin.x + size.width > screen.frame.maxX - 8 {
-            origin.x = screen.frame.maxX - size.width - 8
+        let limit = screen.visibleFrame.insetBy(dx: 8, dy: 0)
+        if origin.x + size.width > limit.maxX {
+            origin.x = limit.maxX - size.width
+        }
+        if origin.x < limit.minX {
+            origin.x = limit.minX
         }
         setFrame(NSRect(origin: origin, size: size), display: true)
         layoutContent()
@@ -119,14 +126,26 @@ final class StartMenuPanel: NSPanel {
         }
     }
 
-    func dismiss() {
+    func dismiss(restoreFrontApp: Bool = false) {
         pendingSearchFocus = false
         let wasVisible = isVisible
+        let app = frontAppOnPresent
+        frontAppOnPresent = nil
         removeMonitor()
         orderOut(nil)
         if wasVisible {
             onDismissed?()
+            if restoreFrontApp {
+                _ = app?.activate()
+            }
         }
+    }
+
+    private func rememberFrontApp() {
+        guard frontAppOnPresent == nil else { return }
+        guard let front = NSWorkspace.shared.frontmostApplication,
+              front.processIdentifier != NSRunningApplication.current.processIdentifier else { return }
+        frontAppOnPresent = front
     }
 
     override func cancelOperation(_ sender: Any?) {

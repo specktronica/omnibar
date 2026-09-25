@@ -53,11 +53,18 @@ enum ScreenGeometry {
     }
 
     static func taskbarFrame(on screen: NSScreen, height: CGFloat) -> CGRect {
-        let visible = screen.frame
+        taskbarFrame(screenFrame: screen.frame, visibleFrame: screen.visibleFrame, height: height)
+    }
+
+    /// Bottom strip of the display. The horizontal span follows `visibleFrame`,
+    /// which macOS insets for a Dock on the left or right.
+    nonisolated static func taskbarFrame(screenFrame: CGRect, visibleFrame: CGRect, height: CGFloat) -> CGRect {
+        let minX = max(screenFrame.minX, visibleFrame.minX)
+        let maxX = min(screenFrame.maxX, visibleFrame.maxX)
         return CGRect(
-            x: visible.minX,
-            y: visible.minY,
-            width: visible.width,
+            x: minX,
+            y: screenFrame.minY,
+            width: max(0, maxX - minX),
             height: height
         )
     }

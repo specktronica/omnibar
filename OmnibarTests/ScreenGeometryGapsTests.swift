@@ -31,6 +31,30 @@ final class ScreenGeometryGapsTests: XCTestCase {
         XCTAssertEqual(overlapping, 1)
     }
 
+    func testTaskbarFrameKeepsASideDockColumnClear() {
+        let screen = CGRect(x: 0, y: 0, width: 1600, height: 900)
+        let fullWidth = ScreenGeometry.taskbarFrame(
+            screenFrame: screen,
+            visibleFrame: CGRect(x: 0, y: 0, width: 1600, height: 875),
+            height: 50
+        )
+        XCTAssertEqual(fullWidth, CGRect(x: 0, y: 0, width: 1600, height: 50))
+
+        let rightDock = ScreenGeometry.taskbarFrame(
+            screenFrame: screen,
+            visibleFrame: CGRect(x: 0, y: 0, width: 1510, height: 875),
+            height: 50
+        )
+        XCTAssertEqual(rightDock, CGRect(x: 0, y: 0, width: 1510, height: 50))
+
+        let leftDock = ScreenGeometry.taskbarFrame(
+            screenFrame: screen,
+            visibleFrame: CGRect(x: 90, y: 0, width: 1510, height: 875),
+            height: 50
+        )
+        XCTAssertEqual(leftDock, CGRect(x: 90, y: 0, width: 1510, height: 50))
+    }
+
     func testDisplayIDReturnsNilWhenNoOverlap() {
         let screens: [(id: CGDirectDisplayID, frame: CGRect)] = [
             (1, CGRect(x: 0, y: 0, width: 800, height: 600))

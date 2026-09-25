@@ -158,7 +158,7 @@ final class TilingGeometryTests: XCTestCase {
         let remembered = AppliedTile(tile: .topRight, frame: frame)
         XCTAssertEqual(
             TilingGeometry.nextTile(direction: .left, currentFrame: frame, usable: usable, remembered: remembered),
-            .leftHalf
+            .topLeft
         )
         XCTAssertEqual(
             TilingGeometry.nextTile(direction: .up, currentFrame: frame, usable: usable, remembered: remembered),
@@ -166,7 +166,7 @@ final class TilingGeometryTests: XCTestCase {
         )
         XCTAssertEqual(
             TilingGeometry.nextTile(direction: .down, currentFrame: frame, usable: usable, remembered: remembered),
-            .bottomHalf
+            .bottomRight
         )
         let topHalf = Tile.topHalf.frame(in: usable)
         let upRemembered = AppliedTile(tile: .topHalf, frame: topHalf)
@@ -195,6 +195,104 @@ final class TilingGeometryTests: XCTestCase {
         XCTAssertEqual(
             TilingGeometry.nextTile(direction: .up, currentFrame: bottomHalf, usable: usable, remembered: downRemembered),
             .topHalf
+        )
+    }
+
+    func testDownFromTopQuarterSlidesToBottomQuarter() {
+        let pairs: [(Tile, Tile)] = [(.topLeft, .bottomLeft), (.topRight, .bottomRight)]
+        for (source, destination) in pairs {
+            let frame = source.frame(in: usable)
+            let remembered = AppliedTile(tile: source, frame: frame)
+            XCTAssertEqual(
+                TilingGeometry.nextTile(direction: .down, currentFrame: frame, usable: usable, remembered: remembered),
+                destination,
+                "\(source)"
+            )
+            XCTAssertEqual(
+                TilingGeometry.nextTile(direction: .down, currentFrame: frame, usable: usable, remembered: nil),
+                destination,
+                "\(source) without memory"
+            )
+        }
+    }
+
+    func testUpFromBottomQuarterSlidesToTopQuarter() {
+        let pairs: [(Tile, Tile)] = [(.bottomLeft, .topLeft), (.bottomRight, .topRight)]
+        for (source, destination) in pairs {
+            let frame = source.frame(in: usable)
+            XCTAssertEqual(
+                TilingGeometry.nextTile(direction: .up, currentFrame: frame, usable: usable, remembered: nil),
+                destination,
+                "\(source)"
+            )
+        }
+    }
+
+    func testDownFromClampedTopQuarterUsesRememberedColumn() {
+        // App refused the quarter height, so the frame is not the ideal top-left tile.
+        let clamped = CGRect(x: 0, y: 400, width: 800, height: 500)
+        let remembered = AppliedTile(tile: .topLeft, frame: clamped)
+        XCTAssertEqual(
+            TilingGeometry.nextTile(direction: .down, currentFrame: clamped, usable: usable, remembered: remembered),
+            .bottomLeft
+        )
+    }
+
+    func testRightFromLeftQuarterSlidesToRightQuarter() {
+        let pairs: [(Tile, Tile)] = [(.topLeft, .topRight), (.bottomLeft, .bottomRight)]
+        for (source, destination) in pairs {
+            let frame = source.frame(in: usable)
+            let remembered = AppliedTile(tile: source, frame: frame)
+            XCTAssertEqual(
+                TilingGeometry.nextTile(direction: .right, currentFrame: frame, usable: usable, remembered: remembered),
+                destination,
+                "\(source)"
+            )
+            XCTAssertEqual(
+                TilingGeometry.nextTile(direction: .right, currentFrame: frame, usable: usable, remembered: nil),
+                destination,
+                "\(source) without memory"
+            )
+        }
+    }
+
+    func testLeftFromRightQuarterSlidesToLeftQuarter() {
+        let pairs: [(Tile, Tile)] = [(.topRight, .topLeft), (.bottomRight, .bottomLeft)]
+        for (source, destination) in pairs {
+            let frame = source.frame(in: usable)
+            XCTAssertEqual(
+                TilingGeometry.nextTile(direction: .left, currentFrame: frame, usable: usable, remembered: nil),
+                destination,
+                "\(source)"
+            )
+        }
+    }
+
+    func testLeftFromClampedRightQuarterUsesRememberedRow() {
+        // App refused the quarter width, so the frame is not the ideal top-right tile.
+        let clamped = CGRect(x: 700, y: 462, width: 900, height: 413)
+        let remembered = AppliedTile(tile: .topRight, frame: clamped)
+        XCTAssertEqual(
+            TilingGeometry.nextTile(direction: .left, currentFrame: clamped, usable: usable, remembered: remembered),
+            .topLeft
+        )
+    }
+
+    func testRightFromTopRightContinuesTheRightCycle() {
+        let frame = Tile.topRight.frame(in: usable)
+        let remembered = AppliedTile(tile: .topRight, frame: frame)
+        XCTAssertEqual(
+            TilingGeometry.nextTile(direction: .right, currentFrame: frame, usable: usable, remembered: remembered),
+            .bottomRight
+        )
+    }
+
+    func testDownFromBottomQuarterStartsAtBottomHalf() {
+        let frame = Tile.bottomLeft.frame(in: usable)
+        let remembered = AppliedTile(tile: .bottomLeft, frame: frame)
+        XCTAssertEqual(
+            TilingGeometry.nextTile(direction: .down, currentFrame: frame, usable: usable, remembered: remembered),
+            .bottomHalf
         )
     }
 

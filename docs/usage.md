@@ -4,7 +4,7 @@ Omnibar is a bottom-of-screen taskbar. It lists windows on the current Space (mi
 
 ## First launch
 
-If Accessibility is not granted, an onboarding window appears. Continue stays disabled until Accessibility is on. The taskbar appears only after you click Continue (or close the window). Screen Recording and “Hide the macOS Dock” are optional on that screen. Granting Screen Recording in this session does not enable live thumbnails until Omnibar relaunches: the row marks as granted, the primary button becomes Restart (that button is enabled even if Accessibility is still off), and Enable Screen Recording stays available until the new process starts.
+If Accessibility is not granted, an onboarding window appears. Continue stays disabled until Accessibility is on. The taskbar appears only after you click Continue (or close the window). Screen Recording and “Hide the Dock on the right” are optional on that screen. Granting Screen Recording in this session does not enable live thumbnails until Omnibar relaunches: the row marks as granted, the primary button becomes Restart (that button is enabled even if Accessibility is still off), and Enable Screen Recording stays available until the new process starts.
 
 After that, Omnibar lives in the menu bar. The extra’s menu is **Settings…** (⌘,), **Tip Omnibar…**, and **Quit Omnibar** (⌘Q). **Tip Omnibar…** opens the Ko-fi page in a browser. Clicking the app again while it is already running opens Settings, as long as Accessibility is granted.
 
@@ -22,6 +22,7 @@ Each display gets its own bar unless Settings hide that display or restrict the 
 | Drag a tile | Reorder, when drag-and-drop reordering is enabled |
 | Click the Start button | Start Menu, Launchpad, or Spotlight (configured action) |
 | Right-click the Start button | Choose the Start button action |
+| Control + Option | Close the Start Menu if it is open. Press and release to open it on the display under the pointer |
 | Click the Show desktop slice (far right) | Minimize all windows on the current Spaces; click again to restore |
 
 In icons-only or grouped mode, a compact tile draws a running mark under the icon (wider when that app is active). Clicking a grouped tile raises a non-minimized window, or minimizes/hides if one of the group is already active.
@@ -44,6 +45,8 @@ The popover shows up to three cards at a time and pages when a group has more. L
 
 The Start Menu is a panel above the Start button: search field, A–Z application list, **Pinned Apps** grid (same pin list as the taskbar), and **Recent Apps**.
 
+Press Control + Option to close the menu. Press those keys and release them, without another key, click, or scroll, to open it on the display under the pointer. If that bar is hidden or the display is in a fullscreen Space, the menu opens on the main display's bar, then any bar that is showing. Holding Control + Option and pressing an arrow still tiles. Closing with this shortcut returns the keyboard to the app that was in front.
+
 Search filters by app name (case-insensitive substring). Up/Down move the highlight in the app list (including while filtering); Enter launches the highlighted app. Launching an app records it in recents, capped by Settings → Start Menu (3–20, default 10). Omnibar itself is not added to recents.
 
 The catalog is scanned from `/Applications`, `/System/Applications`, `/System/Applications/Utilities`, and `~/Applications`.
@@ -60,10 +63,10 @@ Default shortcuts are Control + Option + Arrow. The modifier set is configurable
 
 | Shortcut | Result |
 | --- | --- |
-| ⌃⌥→ | Right half. Press again: top-right quarter, then bottom-right quarter, then right half |
-| ⌃⌥← | Left half. Press again: top-left quarter, then bottom-left quarter, then left half |
-| ⌃⌥↑ | Top half. Press again: fill the usable area, then top half |
-| ⌃⌥↓ | Bottom half. Press again: fill the usable area, then bottom half |
+| ⌃⌥→ | Right half. Press again: top-right quarter, then bottom-right quarter, then right half. From a left quarter, moves to the right quarter in the same row |
+| ⌃⌥← | Left half. Press again: top-left quarter, then bottom-left quarter, then left half. From a right quarter, moves to the left quarter in the same row |
+| ⌃⌥↑ | Top half. Press again: fill the usable area, then top half. From a bottom quarter, moves to the top quarter in the same column |
+| ⌃⌥↓ | Bottom half. Press again: fill the usable area, then bottom half. From a top quarter, moves to the bottom quarter in the same column |
 
 Omnibar treats a press as a repeat when the focused window's frame is within 8 points of the last tile. If the app refused the size (a minimum-size clamp), the frame Omnibar observed after the last tile is used instead. Moving or resizing the window by hand restarts the cycle at the half.
 
@@ -77,13 +80,13 @@ Open from the menu extra, the taskbar **Taskbar → Settings…** item, or by re
 
 | Pane | Controls |
 | --- | --- |
-| General | Launch at login, fully hide Dock, auto-hide taskbar, Start button action |
+| General | Launch at login, hide the Dock on the right, auto-hide taskbar, Start button action |
 | Appearance | Match system appearance or force dark, transparency, bar height, font size, icons-only, Start logo presets and per-lobe colors |
 | Behavior | Group by application, show tabs as items, indicate minimized/hidden, hide instead of minimize on click, Show desktop button, drag reorder, keep order across Space changes, auto-resize overlapping windows |
 | Tiling | Keyboard tiling on/off, modifier set (Control + Option, Control, Control + Command, Control + Option + Command), current shortcuts, Mission Control note when Control alone is selected |
 | Thumbnails | Hover delay, size, title in thumbnail, request Screen Recording |
 | Displays | Main display only, show windows from all screens, per-display visibility |
-| Start Menu | Start button action, recent-apps count |
+| Start Menu | Start button action, recent-apps count, Control + Option shortcut |
 | Apps | Pinned bundle IDs and blacklist |
 | Advanced | Window-list poll interval, overlap-resize skip list, reset to defaults |
 | About | Version, Tip on Ko-fi, copy Bitcoin and Ethereum addresses |
@@ -115,7 +118,7 @@ Reset to defaults restores `AppSettings.default` except **Launch at login**, whi
 | Drag reorder | on |
 | Auto-hide taskbar | off |
 | Window list refresh | 1.5 s (0.5–4) |
-| Fully hide Dock | on |
+| Hide the Dock on the right | on |
 | Launch at login | on |
 | Start button | Start Menu |
 | Recent apps | 10 |
@@ -125,13 +128,13 @@ Reset to defaults restores `AppSettings.default` except **Launch at login**, whi
 
 Logo presets: Classic, Sunset, Ocean, Forest, Candy, Neon, Mono. Each of the four lobes can be recolored.
 
-### Dock hiding
+### Dock position
 
-When **Fully hide Dock** is on, Omnibar backs up `com.apple.dock` autohide, delay, time-modifier, and orientation, then sets autohide with a large delay, moves the Dock to the top, and restarts Dock. During Mission Control it also lowers Dock strip windows so they do not flash on the bottom edge. The backup is restored when you turn the setting off, reset settings, or quit Omnibar. A force-quit or a Homebrew `--zap` while Omnibar is not running can leave the Dock on the top edge; launch Omnibar and turn the setting off, or run `make remove`.
+When **Hide the Dock on the right** is on (the default, including the first launch after install), Omnibar backs up `com.apple.dock` autohide, delay, time-modifier, and orientation, turns autohide on, sets orientation to `right`, and restarts the Dock. The Dock becomes a vertical Dock on the right edge and stays hidden until the pointer reaches that edge. A saved delay of 1000 seconds, left by older builds that fully hid the Dock, is reset so it can appear. The backup is restored when you turn the setting off, reset settings, or quit Omnibar. A force-quit can leave the Dock on the right edge and hidden; launch Omnibar and turn the setting off, or run `make remove`. `make remove` still recognizes the older fully-hidden signature (`autohide-delay` 1000 and orientation `top`). A Homebrew `--zap` while Omnibar is not running can delete the backup without restoring it.
 
 ### Auto-hide
 
-The bar moves off the bottom of the display (2 points remain visible) when the cursor leaves it, the Start Menu, and the thumbnail. A 3-point hot strip at the bottom of the display, or moving onto the bar, shows it again.
+The bar moves off the bottom of the display (2 points remain visible) when the cursor leaves it, the Start Menu, and the thumbnail. An open Start Menu keeps its bar visible until the menu closes. A 3-point hot strip along the bottom of the taskbar, or moving onto the bar, shows it again.
 
 ### Pins, blacklist, overlap skip
 

@@ -40,7 +40,9 @@ struct AppSettings: Codable, Equatable, Sendable {
     var allowDragReorder: Bool = true
     var autoHide: Bool = false
     var pollInterval: Double = 1.5
-    var fullyHideDock: Bool = true
+    /// While Omnibar is running, pin the Dock to the right edge and hide it.
+    /// Decodes the older `fullyHideDock` key when this key is absent.
+    var moveDockToRight: Bool = true
     var launchAtLogin: Bool = true
     var startButtonAction: StartButtonAction = .startMenu
     var recentAppsLimit: Int = 10
@@ -68,6 +70,10 @@ struct AppSettings: Codable, Equatable, Sendable {
 }
 
 extension AppSettings {
+    private enum LegacyDockKeys: String, CodingKey {
+        case fullyHideDock
+    }
+
     enum CodingKeys: String, CodingKey {
         case followSystemAppearance
         case forceDarkMode
@@ -92,7 +98,7 @@ extension AppSettings {
         case allowDragReorder
         case autoHide
         case pollInterval
-        case fullyHideDock
+        case moveDockToRight
         case launchAtLogin
         case startButtonAction
         case recentAppsLimit
@@ -139,7 +145,10 @@ extension AppSettings {
             ?? defaults.allowDragReorder
         autoHide = try container.decodeIfPresent(Bool.self, forKey: .autoHide) ?? defaults.autoHide
         pollInterval = try container.decodeIfPresent(Double.self, forKey: .pollInterval) ?? defaults.pollInterval
-        fullyHideDock = try container.decodeIfPresent(Bool.self, forKey: .fullyHideDock) ?? defaults.fullyHideDock
+        let legacy = try decoder.container(keyedBy: LegacyDockKeys.self)
+        moveDockToRight = try container.decodeIfPresent(Bool.self, forKey: .moveDockToRight)
+            ?? legacy.decodeIfPresent(Bool.self, forKey: .fullyHideDock)
+            ?? defaults.moveDockToRight
         launchAtLogin = try container.decodeIfPresent(Bool.self, forKey: .launchAtLogin) ?? defaults.launchAtLogin
         startButtonAction = try container.decodeIfPresent(StartButtonAction.self, forKey: .startButtonAction)
             ?? defaults.startButtonAction

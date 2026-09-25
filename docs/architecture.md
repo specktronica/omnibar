@@ -24,8 +24,8 @@ scripts/        bootstrap (XcodeGen), build, package/notarize, Homebrew publish,
 1. Load `SettingsStore` from `UserDefaults` and sync the login item.
 2. Create the menu extra (`StatusItemController`).
 3. Start `AppCatalog` (application directories + recents).
-4. Apply Dock hiding from settings (`DockManager`).
-5. If Accessibility is trusted, start `WindowTracker`, `ScreenMonitor`, and `TilingHotkeys`. Otherwise show onboarding. The taskbar does not start while onboarding is showing; Continue (or closing the window) posts `.omnibarPermissionsDidChange` after `isShowing` is cleared. Screen Recording is effective for capture only when `CGPreflightScreenCaptureAccess()` was already true at process start. A mid-session grant is pending restart: preflight stays false until relaunch, so onboarding detects the TCC toggle via other processes’ normal-level window titles (`kCGWindowName`). Windows not at the normal window level (menu bar, wallpaper, Dock, Control Center) are ignored because those titles appear without Screen Recording.
+4. Move the Dock to the right edge and hide it when that setting is on (`DockManager`).
+5. If Accessibility is trusted, start `WindowTracker`, `ScreenMonitor`, `TilingHotkeys`, and `StartMenuHotkey`. Otherwise show onboarding. The taskbar does not start while onboarding is showing; Continue (or closing the window) posts `.omnibarPermissionsDidChange` after `isShowing` is cleared. Screen Recording is effective for capture only when `CGPreflightScreenCaptureAccess()` was already true at process start. A mid-session grant is pending restart: preflight stays false until relaunch, so onboarding detects the TCC toggle via other processes’ normal-level window titles (`kCGWindowName`). Windows not at the normal window level (menu bar, wallpaper, Dock, Control Center) are ignored because those titles appear without Screen Recording.
 
 On quit, Dock prefs are restored, then hotkeys, tracker, screen monitor, and catalog stop.
 
@@ -82,11 +82,13 @@ flowchart LR
   tiler --> ax[AXBridge.setFrame]
 ```
 
-`TilingGeometry` (Model) is pure and `nonisolated`: `Tile` frames inside a usable rect, the left/right/up/down cycle (`nextTile`), the usable area (`visibleFrame` with its bottom raised above the Taskbar when `ScreenMonitor.showsTaskbar(on:)`), and the Cocoa→CG inverse of `ScreenGeometry.cocoaRect`.
+`TilingGeometry` (Model) is pure and `nonisolated`: `Tile` frames inside a usable rect, the left/right/up/down cycle (`nextTile`, including sliding a quarter to the adjacent quarter in the same row or column), the usable area (`visibleFrame` with its bottom raised above the Taskbar when `ScreenMonitor.showsTaskbar(on:)`), and the Cocoa→CG inverse of `ScreenGeometry.cocoaRect`.
 
 `WindowTiler` resolves the frontmost app's focused window, requires `AXWindow` / `AXStandardWindow`, not fullscreen or minimized, and settable position and size (`AXUIElementIsAttributeSettable`). It converts between Cocoa and CG coordinates, calls `AXBridge.setFrame` (position, size, re-read, re-apply position if the app shifted the origin while clamping), and keeps `[CGWindowID: AppliedTile]` so a clamped window can still advance through the cycle. The memory is pruned to the current snapshot's window IDs on `.omnibarSnapshotDidChange`.
 
 `TilingHotkeys` registers Left/Right/Up/Down Arrow with the configured modifiers through Carbon `RegisterEventHotKey` on the application event target. The C handler is `nonisolated` and hops to the main actor. No `CGEventTap` is used, so no Input Monitoring grant is needed. `eventHotKeyExistsErr` (another app owns the combination) is logged and left unregistered. Registration follows `tilingShortcutsEnabled` and `tilingModifiers` through `.omnibarSettingsDidChange`.
+
+`StartMenuHotkey` watches Control+Option with `NSEvent` monitors, which need the Accessibility grant the taskbar already has. Pressing the chord while the menu is open closes it and returns the keyboard to the previous app. Releasing the chord alone opens the menu. Another key, click, scroll, or a tiling hotkey during the chord cancels the open. The decision lives in `StartMenuShortcut` so it can be tested without event monitors.
 
 ## Persistence
 
@@ -98,7 +100,7 @@ All of these are keys in `UserDefaults.standard`:
 | `omnibar.pins.v1` | pinned bundle IDs, order preserved |
 | `omnibar.blacklist.v1` | blacklisted bundle IDs |
 | `omnibar.recents.v1` | recent-launch bundle IDs |
-| `omnibar.dock.backup.v1` | Dock autohide, delay, time-modifier, and orientation backup while fully hidden |
+| `omnibar.dock.backup.v1` | Dock autohide, delay, time-modifier, and orientation backup while the Dock is pinned to the right |
 
 `OrderStore` is memory-only. `SettingsStore.resetToDefaults()` keeps the current launch-at-login value, writes default settings, reverts Dock, and clears order.
 
@@ -109,8 +111,8 @@ All of these are keys in `UserDefaults.standard`:
 | Window titles, raise/minimize/close/fullscreen, move/resize for tiling | Accessibility (`AXUIElement`) |
 | Window frames, on-screen set, layers | `CGWindowListCopyWindowInfo` |
 | Tiling hotkeys | Carbon `RegisterEventHotKey` |
+| Start Menu shortcut | `NSEvent` modifier and key monitors |
 | Spaces and fullscreen Spaces | SkyLight (`dlopen` of `CGS*` / `SLS*` symbols) |
-| Mission Control Dock strip | `CGSSetWindowLevel` on Dock windows |
 | Live thumbnails | ScreenCaptureKit |
 | Launch at login | `SMAppService.mainApp` |
 

@@ -8,7 +8,7 @@ final class ScreenMonitor {
     private var observers: [NSObjectProtocol] = []
     private var globalMouse: Any?
     private var localMouse: Any?
-    private var hideWork: DispatchWorkItem?
+    private var hideWork: [CGDirectDisplayID: DispatchWorkItem] = [:]
 
     func start() {
         stop()
@@ -51,6 +51,44 @@ final class ScreenMonitor {
 
     func panel(for displayID: CGDirectDisplayID) -> TaskbarPanel? {
         panels[displayID]
+    }
+
+    var isAnyStartMenuVisible: Bool {
+        panels.values.contains(where: \.isStartMenuVisible)
+    }
+
+    /// Close every open Start Menu and return the keyboard to the app that was frontmost.
+    func dismissStartMenus() {
+        cancelScheduledHides()
+        for panel in panels.values where panel.isStartMenuVisible {
+            panel.dismissStartMenu(restoreFrontApp: true)
+        }
+        updateAutoHide(cursor: NSEvent.mouseLocation)
+    }
+
+    /// Open the Start Menu on the display under the pointer, or the next visible bar.
+    func presentStartMenu() {
+        guard !isAnyStartMenuVisible else { return }
+        cancelScheduledHides()
+        guard let id = StartMenuShortcutTarget.presentationDisplayID(
+            cursorDisplayID: cursorDisplayID(),
+            visibleDisplayIDs: visibleTaskbarDisplayIDs(),
+            preferredDisplayID: NSScreen.main?.displayID
+        ) else { return }
+        panels[id]?.presentStartMenu()
+    }
+
+    private func cursorDisplayID() -> CGDirectDisplayID? {
+        let point = NSEvent.mouseLocation
+        return NSScreen.screens.first { $0.frame.contains(point) }?.displayID
+    }
+
+    private func visibleTaskbarDisplayIDs() -> [CGDirectDisplayID] {
+        NSScreen.screens.compactMap { screen in
+            let id = screen.displayID
+            guard let panel = panels[id], !panel.isSuppressed else { return nil }
+            return id
+        }
     }
 
     /// True when a bar is shown on that display (not hidden by settings or a
@@ -131,37 +169,61 @@ final class ScreenMonitor {
         if let localMouse { NSEvent.removeMonitor(localMouse) }
         globalMouse = nil
         localMouse = nil
-        hideWork?.cancel()
-        hideWork = nil
+        cancelScheduledHides()
+    }
+
+    private func cancelScheduledHides() {
+        for work in hideWork.values {
+            work.cancel()
+        }
+        hideWork.removeAll()
+    }
+
+    private func cancelScheduledHide(for id: CGDirectDisplayID) {
+        hideWork[id]?.cancel()
+        hideWork[id] = nil
+    }
+
+    private func scheduleHide(_ panel: TaskbarPanel, id: CGDirectDisplayID) {
+        cancelScheduledHide(for: id)
+        let work = DispatchWorkItem { [weak panel] in
+            guard let panel, !panel.isStartMenuVisible else { return }
+            panel.setAutoHidden(true)
+        }
+        hideWork[id] = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: work)
     }
 
     private func updateAutoHide(cursor: NSPoint) {
         let settings = SettingsStore.shared.settings
         guard settings.autoHide else {
+            cancelScheduledHides()
             for panel in panels.values where !panel.isSuppressed {
                 panel.setAutoHidden(false)
             }
             return
         }
-        hideWork?.cancel()
         for (id, panel) in panels {
             if panel.isSuppressed {
+                cancelScheduledHide(for: id)
                 panel.setAutoHidden(true)
                 continue
             }
             guard let screen = NSScreen.screens.first(where: { $0.displayID == id }) else { continue }
             let inPanel = panel.frame.insetBy(dx: 0, dy: -2).contains(cursor)
             let inRelated = panel.ownsCursor(cursor)
-            let hot = CGRect(x: screen.frame.minX, y: screen.frame.minY, width: screen.frame.width, height: 3)
+            let bar = ScreenGeometry.taskbarFrame(
+                on: screen,
+                height: CGFloat(settings.taskbarHeight)
+            )
+            let hot = CGRect(x: bar.minX, y: screen.frame.minY, width: bar.width, height: 3)
             let inHot = hot.contains(cursor)
-            if inPanel || inRelated || inHot {
+            // An open menu keeps its bar on screen. Hiding would dismiss the menu.
+            if inPanel || inRelated || inHot || panel.isStartMenuVisible {
+                cancelScheduledHide(for: id)
                 panel.setAutoHidden(false)
             } else {
-                let work = DispatchWorkItem { [weak panel] in
-                    panel?.setAutoHidden(true)
-                }
-                hideWork = work
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: work)
+                scheduleHide(panel, id: id)
             }
         }
     }

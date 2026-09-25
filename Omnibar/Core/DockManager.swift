@@ -1,10 +1,11 @@
 import AppKit
-import CoreGraphics
 import Foundation
 
 nonisolated enum DockOrientation: Sendable {
     static let top = "top"
     static let bottom = "bottom"
+    static let left = "left"
+    static let right = "right"
 
     static func normalized(_ value: String?) -> String {
         switch value {
@@ -17,27 +18,57 @@ nonisolated enum DockOrientation: Sendable {
     }
 }
 
-nonisolated enum DockStripHiding: Sendable {
-    static let dockWindowLevel = Int32(CGWindowLevelForKey(.dockWindow))
-    static let buriedLevel = Int32(CGWindowLevelForKey(.desktopWindow)) - 2
+nonisolated struct DockPreferences: Equatable, Sendable {
+    var autohide: Bool
+    var autohideDelay: Double
+    var autohideTimeModifier: Double
+    var orientation: String
 
-    static func isStrip(name: String, layer: Int32) -> Bool {
-        if name.hasPrefix("Wallpaper") { return false }
-        return layer == dockWindowLevel
+    static let standardDelay = 0.5
+    static let standardTimeModifier = 1.0
+
+    func matches(_ other: DockPreferences) -> Bool {
+        autohide == other.autohide
+            && orientation == other.orientation
+            && abs(autohideDelay - other.autohideDelay) < 0.001
+            && abs(autohideTimeModifier - other.autohideTimeModifier) < 0.001
+    }
+}
+
+nonisolated enum DockRelocation {
+    /// Previous builds hid the Dock on the top edge with this autohide delay.
+    static let legacyHiddenDelay = 1000.0
+
+    static func isLegacyHiddenSignature(delay: Double, orientation: String) -> Bool {
+        abs(delay - legacyHiddenDelay) < 0.001
+            && DockOrientation.normalized(orientation) == DockOrientation.top
     }
 
-    static func stripWindowIDs(from windows: [[String: Any]], dockPID: pid_t) -> [CGWindowID] {
-        var ids: [CGWindowID] = []
-        for info in windows {
-            let pid = pid_t((info[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value ?? 0)
-            guard pid == dockPID else { continue }
-            let name = info[kCGWindowName as String] as? String ?? ""
-            let layer = (info[kCGWindowLayer as String] as? NSNumber)?.int32Value ?? 0
-            guard isStrip(name: name, layer: layer) else { continue }
-            guard let id = (info[kCGWindowNumber as String] as? NSNumber)?.uint32Value else { continue }
-            ids.append(id)
+    /// Preferences worth restoring. A legacy hidden signature is not the user's
+    /// Dock: that build forced a 1000s delay and the top edge.
+    static func backup(from live: DockPreferences) -> DockPreferences {
+        guard isLegacyHiddenSignature(delay: live.autohideDelay, orientation: live.orientation) else {
+            return live
         }
-        return ids
+        return DockPreferences(
+            autohide: live.autohide,
+            autohideDelay: DockPreferences.standardDelay,
+            autohideTimeModifier: DockPreferences.standardTimeModifier,
+            orientation: DockOrientation.bottom
+        )
+    }
+
+    /// Right edge, hidden. A leftover fully-hidden delay is reset so the Dock
+    /// can still appear when the pointer reaches that edge.
+    static func placedOnRight(_ backup: DockPreferences) -> DockPreferences {
+        var placed = backup
+        placed.orientation = DockOrientation.right
+        placed.autohide = true
+        if abs(placed.autohideDelay - legacyHiddenDelay) < 0.001 {
+            placed.autohideDelay = DockPreferences.standardDelay
+            placed.autohideTimeModifier = DockPreferences.standardTimeModifier
+        }
+        return placed
     }
 }
 
@@ -46,123 +77,88 @@ final class DockManager {
 
     private let domain = "com.apple.dock"
     private let backupKey = "omnibar.dock.backup.v1"
-    private var appliedFullyHidden = false
+    private var appliedRightDock = false
     private var isMutating = false
-    private var hideTimer: Timer?
-    private var buriedLevels: [CGWindowID: Int32] = [:]
 
     func applyFromSettings() {
         guard !isMutating else { return }
-        let hide = SettingsStore.shared.settings.fullyHideDock
-        if hide, !appliedFullyHidden {
-            applyFullyHidden()
-        } else if !hide, appliedFullyHidden {
+        let move = SettingsStore.shared.settings.moveDockToRight
+        if move, !appliedRightDock {
+            applyRightDock()
+        } else if !move, appliedRightDock {
             revertIfNeeded()
         }
     }
 
-    func applyFullyHidden() {
+    func applyRightDock() {
         backupIfNeeded()
-        writeDock("autohide", true)
-        writeDock("autohide-delay", 1000.0)
-        writeDock("autohide-time-modifier", 0.0)
-        // Top keeps a Mission Control flash off Omnibar's bottom edge.
-        writeDock("orientation", DockOrientation.top)
+        let desired = DockRelocation.placedOnRight(currentBackup() ?? DockRelocation.backup(from: readLive()))
+        appliedRightDock = true
+        guard !readLive().matches(desired) else { return }
+        write(desired)
         restartDock()
-        appliedFullyHidden = true
-        startMissionControlHiding()
     }
 
     func revertIfNeeded() {
         isMutating = true
         defer { isMutating = false }
-        stopMissionControlHiding()
-        guard appliedFullyHidden || UserDefaults.standard.dictionary(forKey: backupKey) != nil else { return }
-        if let backup = UserDefaults.standard.dictionary(forKey: backupKey) {
-            if let autohide = backup["autohide"] as? Bool {
-                writeDock("autohide", autohide)
-            }
-            if let delay = backup["autohide-delay"] as? Double {
-                writeDock("autohide-delay", delay)
-            }
-            if let modifier = backup["autohide-time-modifier"] as? Double {
-                writeDock("autohide-time-modifier", modifier)
-            }
-            if let orientation = backup["orientation"] as? String {
-                writeDock("orientation", DockOrientation.normalized(orientation))
-            }
+        guard appliedRightDock || UserDefaults.standard.dictionary(forKey: backupKey) != nil else { return }
+        if let backup = currentBackup() {
+            write(backup)
             UserDefaults.standard.removeObject(forKey: backupKey)
         } else {
-            writeDock("autohide-delay", 0.5)
+            writeDock("autohide-delay", DockPreferences.standardDelay)
             writeDock("orientation", DockOrientation.bottom)
         }
         restartDock()
-        appliedFullyHidden = false
-    }
-
-    // Mission Control still composites the Dock at dock-window level even with a huge autohide delay.
-    private func startMissionControlHiding() {
-        stopMissionControlHiding()
-        hideTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
-            Task { @MainActor in
-                self?.hideDockStripIfNeeded()
-            }
-        }
-        hideTimer?.tolerance = 0.02
-        hideDockStripIfNeeded()
-    }
-
-    private func stopMissionControlHiding() {
-        hideTimer?.invalidate()
-        hideTimer = nil
-        restoreBuriedDockWindows()
-    }
-
-    private func hideDockStripIfNeeded() {
-        guard appliedFullyHidden else { return }
-        guard let dockPID = NSWorkspace.shared.runningApplications
-            .first(where: { $0.bundleIdentifier == "com.apple.dock" })?
-            .processIdentifier else {
-            restoreBuriedDockWindows()
-            return
-        }
-        let list = CGWindowListCopyWindowInfo(.optionOnScreenOnly, kCGNullWindowID) as? [[String: Any]] ?? []
-        let strip = Set(DockStripHiding.stripWindowIDs(from: list, dockPID: dockPID))
-        for id in strip {
-            if buriedLevels[id] == nil {
-                buriedLevels[id] = CGSBridge.shared.windowLevel(of: id) ?? DockStripHiding.dockWindowLevel
-            }
-            CGSBridge.shared.setWindowLevel(id, level: DockStripHiding.buriedLevel)
-        }
-        for (id, original) in buriedLevels where !strip.contains(id) {
-            CGSBridge.shared.setWindowLevel(id, level: original)
-            buriedLevels.removeValue(forKey: id)
-        }
-    }
-
-    private func restoreBuriedDockWindows() {
-        for (id, original) in buriedLevels {
-            CGSBridge.shared.setWindowLevel(id, level: original)
-        }
-        buriedLevels.removeAll()
+        appliedRightDock = false
     }
 
     private func backupIfNeeded() {
         var backup = UserDefaults.standard.dictionary(forKey: backupKey) ?? [:]
-        let defaults = UserDefaults(suiteName: domain)
+        let captured = DockRelocation.backup(from: readLive())
         if backup["autohide"] == nil {
-            backup["autohide"] = defaults?.object(forKey: "autohide") as? Bool ?? false
+            backup["autohide"] = captured.autohide
         }
         if backup["autohide-delay"] == nil {
-            backup["autohide-delay"] = defaults?.object(forKey: "autohide-delay") as? Double ?? 0.5
+            backup["autohide-delay"] = captured.autohideDelay
         }
         if backup["autohide-time-modifier"] == nil {
-            backup["autohide-time-modifier"] = defaults?.object(forKey: "autohide-time-modifier") as? Double ?? 1.0
+            backup["autohide-time-modifier"] = captured.autohideTimeModifier
         }
         if backup["orientation"] == nil {
-            backup["orientation"] = DockOrientation.normalized(defaults?.string(forKey: "orientation"))
+            backup["orientation"] = captured.orientation
         }
         UserDefaults.standard.set(backup, forKey: backupKey)
+    }
+
+    private func currentBackup() -> DockPreferences? {
+        guard let backup = UserDefaults.standard.dictionary(forKey: backupKey) else { return nil }
+        let live = readLive()
+        return DockPreferences(
+            autohide: backup["autohide"] as? Bool ?? live.autohide,
+            autohideDelay: backup["autohide-delay"] as? Double ?? live.autohideDelay,
+            autohideTimeModifier: backup["autohide-time-modifier"] as? Double ?? live.autohideTimeModifier,
+            orientation: DockOrientation.normalized(backup["orientation"] as? String ?? live.orientation)
+        )
+    }
+
+    private func readLive() -> DockPreferences {
+        let defaults = UserDefaults(suiteName: domain)
+        return DockPreferences(
+            autohide: defaults?.object(forKey: "autohide") as? Bool ?? false,
+            autohideDelay: defaults?.object(forKey: "autohide-delay") as? Double ?? DockPreferences.standardDelay,
+            autohideTimeModifier: defaults?.object(forKey: "autohide-time-modifier") as? Double
+                ?? DockPreferences.standardTimeModifier,
+            orientation: DockOrientation.normalized(defaults?.string(forKey: "orientation"))
+        )
+    }
+
+    private func write(_ prefs: DockPreferences) {
+        writeDock("autohide", prefs.autohide)
+        writeDock("autohide-delay", prefs.autohideDelay)
+        writeDock("autohide-time-modifier", prefs.autohideTimeModifier)
+        writeDock("orientation", DockOrientation.normalized(prefs.orientation))
     }
 
     private func writeDock(_ key: String, _ value: Any) {

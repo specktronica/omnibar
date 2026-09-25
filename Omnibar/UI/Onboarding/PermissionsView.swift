@@ -180,17 +180,17 @@ struct PermissionsView: View {
                 _ = PermissionsManager.shared.promptScreenRecording()
             }
             HStack(alignment: .top) {
-                Image(systemName: store.settings.fullyHideDock ? "checkmark.circle.fill" : "circle")
-                    .foregroundStyle(store.settings.fullyHideDock ? .green : .secondary)
+                Image(systemName: store.settings.moveDockToRight ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(store.settings.moveDockToRight ? .green : .secondary)
                     .font(.title3)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Hide the macOS Dock").font(.headline)
-                    Text("Moves the system Dock to the top of the screen and keeps it hidden while Omnibar is running, including Mission Control. The Dock is restored when you quit.")
+                    Text("Hide the Dock on the right").font(.headline)
+                    Text("Moves the system Dock to the right edge as a vertical Dock and hides it while Omnibar is running. The previous position is restored when you quit.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                Toggle("Hide the macOS Dock", isOn: $store.settings.fullyHideDock)
+                Toggle("Hide the Dock on the right", isOn: $store.settings.moveDockToRight)
                     .toggleStyle(.switch)
                     .labelsHidden()
             }

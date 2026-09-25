@@ -69,6 +69,18 @@ final class AppSettingsDecodeTests: XCTestCase {
     }
 
     @MainActor
+    func testLegacyFullyHideDockKeyDecodesAsMoveDockToRight() throws {
+        var object = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: try JSONEncoder().encode(AppSettings.default)) as? [String: Any]
+        )
+        object.removeValue(forKey: "moveDockToRight")
+        object["fullyHideDock"] = false
+        let data = try JSONSerialization.data(withJSONObject: object)
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: data)
+        XCTAssertFalse(decoded.moveDockToRight)
+    }
+
+    @MainActor
     func testAppearanceIsDarkForced() {
         var settings = AppSettings.default
         XCTAssertFalse(settings.appearanceIsDarkForced)
