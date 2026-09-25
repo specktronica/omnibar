@@ -14,7 +14,7 @@ Omnibar/
   Resources/    assets, entitlements
 OmnibarTests/   logic and geometry tests (no live window-server tests)
 project.yml     XcodeGen spec
-scripts/        bootstrap (XcodeGen), build, package/notarize, Homebrew publish, uninstall, secret scan
+scripts/        bootstrap (XcodeGen), build, clean, package/notarize, Homebrew publish, uninstall, secret scan
 ```
 
 ## Startup

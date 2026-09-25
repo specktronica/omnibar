@@ -6,6 +6,7 @@
 #   make remove
 #
 # Does not delete repo build products (build/Omnibar.app, build/DerivedData).
+# `make clean` removes those.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 

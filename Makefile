@@ -1,4 +1,4 @@
-.PHONY: build run release publish brew-install remove
+.PHONY: build run release publish brew-install remove clean
 
 APP := build/Omnibar.app
 
@@ -30,3 +30,7 @@ brew-install:
 # Quit, restore Dock, remove Applications copies, Xcode DerivedData products, Homebrew cask/tap, prefs, TCC.
 remove:
 	./scripts/remove.sh
+
+# Delete build/ (app, DerivedData, release zips). Leaves an installed copy alone.
+clean:
+	./scripts/clean.sh

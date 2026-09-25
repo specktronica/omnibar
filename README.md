@@ -40,7 +40,7 @@ brew uninstall --cask --zap specktronica/omnibar/omnibar
 
 `--zap` removes the app, login item, prefs, and caches. It does not reset TCC, untap `specktronica/omnibar`, or delete Xcode DerivedData copies. If Omnibar is already quit, zap can delete the Dock backup without restoring it (Dock left hidden on the right edge, or, from an older build, stuck at the top with a long autohide delay).
 
-From a clone, `make remove` is the full cleanup: it restores the Dock from `omnibar.dock.backup.v1` or the older fully-hidden signature even when the app is not running, deletes `/Applications/Omnibar.app`, `~/Applications/Omnibar.app`, and Xcode DerivedData `Omnibar.app` products, uninstalls the Homebrew cask, untaps `specktronica/omnibar`, unregisters leftover Launch Services copies, removes preferences and caches, resets Accessibility and Screen Recording grants, and deletes the login item. Repo build products (`build/Omnibar.app`, `build/DerivedData`) are left in place.
+From a clone, `make remove` is the full cleanup: it restores the Dock from `omnibar.dock.backup.v1` or the older fully-hidden signature even when the app is not running, deletes `/Applications/Omnibar.app`, `~/Applications/Omnibar.app`, and Xcode DerivedData `Omnibar.app` products, uninstalls the Homebrew cask, untaps `specktronica/omnibar`, unregisters leftover Launch Services copies, removes preferences and caches, resets Accessibility and Screen Recording grants, and deletes the login item. Repo build products (`build/Omnibar.app`, `build/DerivedData`) are left in place. `make clean` deletes those.
 
 ## Build
 
@@ -59,6 +59,7 @@ make release  # Developer ID sign, notarize, staple, zip to build/Omnibar-<versi
 make publish      # GitHub Release + Homebrew tap (needs the zip from make release)
 make brew-install # install or upgrade the Homebrew cask
 make remove       # uninstall Applications copies, Xcode DerivedData products, Homebrew cask/tap, prefs, TCC, login item
+make clean        # delete build/ (app, DerivedData, release zips); leaves an installed copy
 ```
 
 Or open the generated project:
