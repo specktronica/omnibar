@@ -22,6 +22,7 @@ final class TaskbarView: NSView {
     private var itemViews: [TaskItemView] = []
     private var items: [TaskItem] = []
     private var settings: AppSettings = .default
+    private(set) var currentSpace: UInt64?
     private var draggingView: TaskItemView?
     private var dragOffset: CGFloat = 0
 
@@ -39,9 +40,10 @@ final class TaskbarView: NSView {
 
     required init?(coder: NSCoder) { nil }
 
-    func update(items: [TaskItem], settings: AppSettings) {
+    func update(items: [TaskItem], settings: AppSettings, currentSpace: UInt64? = nil) {
         startButton.apply(settings.startLogo)
         self.settings = settings
+        self.currentSpace = currentSpace
         if draggingView != nil { return }
         self.items = items
         syncViews()
@@ -115,13 +117,13 @@ final class TaskbarView: NSView {
                 id: "placeholder-\(itemViews.count)",
                 kind: .pinned(bundleID: "", appName: "", icon: nil, badge: nil)
             )
-            let view = TaskItemView(item: placeholder, settings: settings)
+            let view = TaskItemView(item: placeholder, settings: settings, currentSpace: currentSpace)
             wire(view)
             addSubview(view)
             itemViews.append(view)
         }
         for (index, item) in items.enumerated() {
-            itemViews[index].apply(item: item, settings: settings)
+            itemViews[index].apply(item: item, settings: settings, currentSpace: currentSpace)
         }
         addSubview(appsDivider, positioned: .above, relativeTo: nil)
         addSubview(showDesktopButton, positioned: .above, relativeTo: nil)

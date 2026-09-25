@@ -112,10 +112,25 @@ final class ThumbnailCardView: NSView {
         }
     }
 
-    func configure(window: WindowInfo, item: TaskItem, size _: CGFloat, showTitle: Bool) {
+    func configure(
+        window: WindowInfo,
+        item: TaskItem,
+        size _: CGFloat,
+        showTitle: Bool,
+        currentSpace: UInt64? = nil
+    ) {
         windowInfo = window
-        titleField.isHidden = !showTitle
-        titleField.stringValue = window.displayTitle
+        let elsewhere = SpacePresence.isOnAnotherSpace(window, currentSpace: currentSpace)
+        if showTitle {
+            titleField.stringValue = SpacePresence.labeled(window.displayTitle, onAnotherSpace: elsewhere)
+            titleField.isHidden = false
+        } else if elsewhere {
+            titleField.stringValue = SpacePresence.anotherSpacePhrase
+            titleField.isHidden = false
+        } else {
+            titleField.stringValue = ""
+            titleField.isHidden = true
+        }
         trafficLights.isFullscreen = window.isFullscreen
         trafficLights.optionHeld = optionHeld
         fallbackIcon.image = item.bundleID.flatMap { IconCache.icon(forBundleID: $0) }

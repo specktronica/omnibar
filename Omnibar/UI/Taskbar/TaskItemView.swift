@@ -20,11 +20,13 @@ final class TaskItemView: NSView {
     private var mouseDownEvent: NSEvent?
     private var dragging = false
     private var settings: AppSettings
+    private var currentSpace: UInt64?
     private var appliedToken = 0
 
-    init(item: TaskItem, settings: AppSettings) {
+    init(item: TaskItem, settings: AppSettings, currentSpace: UInt64? = nil) {
         self.item = item
         self.settings = settings
+        self.currentSpace = currentSpace
         super.init(frame: .zero)
         wantsLayer = true
         layer?.cornerRadius = 8
@@ -47,17 +49,18 @@ final class TaskItemView: NSView {
         addSubview(dotsView)
         addSubview(badgeView)
         refresh()
-        appliedToken = Self.displayToken(item: item, settings: settings)
+        appliedToken = Self.displayToken(item: item, settings: settings, currentSpace: currentSpace)
     }
 
     required init?(coder: NSCoder) { nil }
 
-    func apply(item: TaskItem, settings: AppSettings) {
-        let token = Self.displayToken(item: item, settings: settings)
+    func apply(item: TaskItem, settings: AppSettings, currentSpace: UInt64? = nil) {
+        let token = Self.displayToken(item: item, settings: settings, currentSpace: currentSpace)
         if token == appliedToken { return }
         appliedToken = token
         self.item = item
         self.settings = settings
+        self.currentSpace = currentSpace
         refresh()
         needsLayout = true
         needsDisplay = true
@@ -206,7 +209,7 @@ final class TaskItemView: NSView {
         max(14, (iconLength * 14 / 26).rounded())
     }
 
-    static func displayToken(item: TaskItem, settings: AppSettings) -> Int {
+    static func displayToken(item: TaskItem, settings: AppSettings, currentSpace: UInt64?) -> Int {
         var hasher = Hasher()
         hasher.combine(item.uiKey)
         hasher.combine(settings.compactItems)
@@ -215,6 +218,10 @@ final class TaskItemView: NSView {
         hasher.combine(settings.iconOnly)
         hasher.combine(settings.groupByApplication)
         hasher.combine(item.bundleID)
+        hasher.combine(currentSpace)
+        for window in item.windows {
+            hasher.combine(window.spaces)
+        }
         return hasher.finalize()
     }
 
@@ -266,13 +273,19 @@ final class TaskItemView: NSView {
         badgeView.text = item.badge
         if item.isPinnedLauncher || !settings.compactItems || item.windows.isEmpty {
             dotsView.count = 0
+            dotsView.ringFlags = []
+            dotsView.widens = false
             dotsView.activeIndex = nil
         } else {
-            dotsView.count = WindowDotsView.markCount(
-                windowCount: item.windows.count,
-                grouped: settings.groupByApplication
+            let marks = SpacePresence.runningMarks(
+                windows: item.windows,
+                grouped: settings.groupByApplication,
+                currentSpace: currentSpace
             )
+            dotsView.ringFlags = marks.map(\.ring)
+            dotsView.widens = marks.count == 1 && marks[0].widens
             dotsView.activeIndex = item.isActive ? 0 : nil
+            dotsView.count = marks.count
         }
         let fontSize = CGFloat(settings.fontSize)
         let base = NSFont.systemFont(ofSize: fontSize)
@@ -304,7 +317,7 @@ final class TaskItemView: NSView {
         case .window(let window):
             return label(
                 name: window.appName,
-                description: windowTitle(window),
+                description: secondaryText(for: window),
                 font: font,
                 base: base,
                 color: color,
@@ -316,7 +329,7 @@ final class TaskItemView: NSView {
             let primary = windows.first(where: \.isActive) ?? windows.first
             return label(
                 name: appName + extra,
-                description: primary.flatMap(windowTitle),
+                description: primary.flatMap(secondaryText),
                 font: font,
                 base: base,
                 color: color,
@@ -336,6 +349,13 @@ final class TaskItemView: NSView {
         let title = window.title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !title.isEmpty, title != window.appName else { return nil }
         return title
+    }
+
+    private func secondaryText(for window: WindowInfo) -> String? {
+        SpacePresence.detail(
+            title: windowTitle(window),
+            onAnotherSpace: SpacePresence.isOnAnotherSpace(window, currentSpace: currentSpace)
+        )
     }
 
     private func label(
@@ -382,9 +402,7 @@ final class WindowDotsView: NSView {
 
     /// One window keeps the pill. Grouping draws two dots for two windows and three for more.
     nonisolated static func markCount(windowCount: Int, grouped: Bool) -> Int {
-        guard windowCount > 0 else { return 0 }
-        guard grouped, windowCount > 1 else { return 1 }
-        return min(3, windowCount)
+        SpacePresence.markCount(windowCount: windowCount, grouped: grouped)
     }
 
     /// Frames for the pill (`count == 1`) or for up to three dots.
@@ -449,21 +467,62 @@ final class WindowDotsView: NSView {
         }
     }
 
+    /// Parallel to the drawn marks. A true entry is a ring (another Space).
+    var ringFlags: [Bool] = [] {
+        didSet {
+            if ringFlags != oldValue {
+                needsDisplay = true
+            }
+        }
+    }
+
+    /// Widens the single-window pill. Dots ignore this.
+    var widens = false {
+        didSet {
+            if widens != oldValue {
+                needsDisplay = true
+            }
+        }
+    }
+
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
     override func draw(_ dirtyRect: NSRect) {
-        let frames = Self.markFrames(count: count, active: activeIndex != nil, in: bounds)
+        let frames = Self.markFrames(count: count, active: widens, in: bounds)
         guard !frames.isEmpty else { return }
         let alpha: CGFloat = activeIndex == nil ? 0.55 : 1
         NSColor.systemBlue.withAlphaComponent(alpha).setFill()
         let dots = count > 1
-        for frame in frames {
-            if dots {
+        for (index, frame) in frames.enumerated() {
+            let ring = ringFlags.indices.contains(index) && ringFlags[index]
+            if ring {
+                ringPath(in: frame, oval: dots).fill()
+            } else if dots {
                 NSBezierPath(ovalIn: frame).fill()
             } else {
                 NSBezierPath(roundedRect: frame, xRadius: frame.height / 2, yRadius: frame.height / 2).fill()
             }
         }
+    }
+
+    /// Even-odd hole so a window on another Space reads as an outline of the same mark.
+    private func ringPath(in frame: CGRect, oval: Bool) -> NSBezierPath {
+        let thickness = min(1, min(frame.width, frame.height) / 3)
+        let inner = frame.insetBy(dx: thickness, dy: thickness)
+        let path = NSBezierPath()
+        if oval {
+            path.appendOval(in: frame)
+            if inner.width > 0, inner.height > 0 {
+                path.appendOval(in: inner)
+            }
+        } else {
+            path.appendRoundedRect(frame, xRadius: frame.height / 2, yRadius: frame.height / 2)
+            if inner.width > 0, inner.height > 0 {
+                path.appendRoundedRect(inner, xRadius: inner.height / 2, yRadius: inner.height / 2)
+            }
+        }
+        path.windingRule = .evenOdd
+        return path
     }
 }
 

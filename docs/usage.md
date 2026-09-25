@@ -25,7 +25,7 @@ Each display gets its own bar unless Settings hide that display or restrict the 
 | Control + Option | Close the Start Menu if it is open. Press and release to open it on the display under the pointer |
 | Click the Show desktop slice (far right) | Minimize all windows on the current Spaces; click again to restore |
 
-In icons-only or grouped mode, a compact tile draws a blue running mark under the icon (wider when that app is active). A grouped app with two windows draws two dots, and three or more windows draw three. Clicking a grouped tile raises a non-minimized window on the current Space when there is one, otherwise a window on another Space, or minimizes/hides if one of the group is already active. A click on a window in another Space switches to that Space.
+In icons-only or grouped mode, a compact tile draws a blue running mark under the icon (wider when that window is active on this Space). A grouped app with two windows draws two dots, and three or more windows draw three. A window on another Space draws its mark as a ring, and windows on this Space are drawn first. When a group has more than three windows and any of them is on another Space, the last dot stays a ring. The tile tooltip adds “Another Space” for the window it names. Clicking a grouped tile raises a non-minimized window on the current Space when there is one, otherwise a window on another Space, or minimizes/hides if one of the group is already active. A click on a window in another Space switches to that Space.
 
 ### Window menu
 
@@ -35,11 +35,11 @@ Right-click a tile:
 - **Keep in Taskbar** — pin by bundle ID (stays on the bar when the app has no windows)
 - **New Window**, **Hide**, **Add to Blacklist**, **Quit**
 - **Fullscreen**, **Minimize**, **Close**
-- When grouped with more than one window, each window title is listed so you can raise a specific one
+- When grouped with more than one window, each window title is listed so you can raise a specific one. A window on another Space has “Another Space” after its title
 
 ### Hover thumbnails
 
-The popover shows up to three cards at a time and pages when a group has more. Live captures need Screen Recording; otherwise the card uses the app icon. Cards have close / minimize / zoom (Option or a fullscreen window uses fullscreen instead of zoom). Hovering a card temporarily raises that window when it is already on screen. A minimized or hidden window stays that way until the card is clicked. Leaving the popover restores the previous front window unless you clicked a card.
+The popover shows up to three cards at a time and pages when a group has more. Live captures need Screen Recording; otherwise the card uses the app icon. Cards have close / minimize / zoom (Option or a fullscreen window uses fullscreen instead of zoom). A card for a window on another Space says “Another Space” in the title row, including when thumbnail titles are off. Hovering a card temporarily raises that window when it is already on screen. A minimized, hidden, or other-Space window stays that way until the card is clicked. Leaving the popover restores the previous front window unless you clicked a card.
 
 ## Start Menu
 

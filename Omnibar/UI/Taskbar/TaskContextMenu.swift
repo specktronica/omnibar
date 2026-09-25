@@ -2,7 +2,7 @@ import AppKit
 import Foundation
 
 enum TaskContextMenu {
-    static func build(item: TaskItem, displayID: CGDirectDisplayID) -> NSMenu {
+    static func build(item: TaskItem, displayID: CGDirectDisplayID, currentSpace: UInt64? = nil) -> NSMenu {
         let menu = NSMenu()
         let taskbar = NSMenuItem(title: "Taskbar", action: nil, keyEquivalent: "")
         taskbar.submenu = taskbarSubmenu(displayID: displayID)
@@ -65,7 +65,10 @@ enum TaskContextMenu {
         if case .grouped(_, _, let windows, _) = item.kind, windows.count > 1 {
             menu.addItem(.separator())
             for window in windows {
-                let title = window.displayTitle
+                let title = SpacePresence.labeled(
+                    window.displayTitle,
+                    onAnotherSpace: SpacePresence.isOnAnotherSpace(window, currentSpace: currentSpace)
+                )
                 let sub = NSMenuItem(title: title, action: #selector(Target.raiseWindow(_:)), keyEquivalent: "")
                 sub.representedObject = window.orderKey
                 sub.state = window.isActive ? .on : .off

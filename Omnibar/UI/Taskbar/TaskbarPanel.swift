@@ -77,7 +77,11 @@ final class TaskbarPanel: NSPanel {
 
     func applySnapshot(_ snapshot: TaskbarSnapshot) {
         let items = snapshot.items(for: screenID)
-        taskbarView.update(items: items, settings: SettingsStore.shared.settings)
+        taskbarView.update(
+            items: items,
+            settings: SettingsStore.shared.settings,
+            currentSpace: snapshot.currentSpaces[screenID]
+        )
         applyAppearance()
         if !taskbarView.isDragging {
             layoutBar()
@@ -236,7 +240,11 @@ final class TaskbarPanel: NSPanel {
     }
 
     private func showContextMenu(for item: TaskItem, event: NSEvent) {
-        let menu = TaskContextMenu.build(item: item, displayID: screenID)
+        let menu = TaskContextMenu.build(
+            item: item,
+            displayID: screenID,
+            currentSpace: taskbarView.currentSpace
+        )
         NSMenu.popUpContextMenu(menu, with: event, for: taskbarView)
     }
 
@@ -291,7 +299,7 @@ final class TaskbarPanel: NSPanel {
         guard !item.windows.isEmpty else { return }
         guard let view = taskbarView.view(forItemID: item.id) else { return }
         let rect = convertToScreen(view.frame)
-        thumbnail.present(item: item, anchor: rect)
+        thumbnail.present(item: item, anchor: rect, currentSpace: taskbarView.currentSpace)
     }
 
     private func commitReorder(_ items: [TaskItem]) {

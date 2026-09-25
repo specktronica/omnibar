@@ -2,10 +2,10 @@ import AppKit
 import Foundation
 
 enum ThumbnailHoverFocus {
-    /// Peek only windows already on screen. Raising a minimized or hidden
-    /// window would restore it; a click on the card still does that.
+    /// Peek only windows already on screen. Minimized, hidden, and other-Space
+    /// windows stay put until the card is clicked.
     static func shouldTemporarilyRaise(_ window: WindowInfo) -> Bool {
-        !window.isMinimized && !window.isHidden
+        window.isOnScreen && !window.isMinimized && !window.isHidden
     }
 }
 
@@ -50,6 +50,7 @@ final class ThumbnailPopover: NSPanel {
     private(set) var isHovered = false
     private var windows: [WindowInfo] = []
     private var item: TaskItem?
+    private var currentSpace: UInt64?
     private var offset = 0
     private var thumbnailSize: CGFloat = 240
     private var refreshTask: Task<Void, Never>?
@@ -131,7 +132,7 @@ final class ThumbnailPopover: NSPanel {
 
     override var canBecomeKey: Bool { false }
 
-    func present(item: TaskItem, anchor: NSRect) {
+    func present(item: TaskItem, anchor: NSRect, currentSpace: UInt64? = nil) {
         guard !item.windows.isEmpty else { return }
         hoverFocusWork?.cancel()
         hoverFocusWork = nil
@@ -145,6 +146,7 @@ final class ThumbnailPopover: NSPanel {
         hoverFocusCommitted = false
         hoverFocusedWindowID = item.windows.first(where: \.isActive)?.id
         self.item = item
+        self.currentSpace = currentSpace
         windows = item.windows
         let visible = visibleCount
         let activeIndex = windows.firstIndex(where: \.isActive) ?? 0
@@ -325,7 +327,13 @@ final class ThumbnailPopover: NSPanel {
                     width: cardSize.width,
                     height: cardSize.height
                 )
-                card.configure(window: window, item: item, size: thumbnailSize, showTitle: showTitle)
+                card.configure(
+                    window: window,
+                    item: item,
+                    size: thumbnailSize,
+                    showTitle: showTitle,
+                    currentSpace: currentSpace
+                )
             } else {
                 card.isHidden = true
             }

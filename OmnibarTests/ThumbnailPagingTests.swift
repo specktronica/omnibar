@@ -24,6 +24,7 @@ final class ThumbnailPagingTests: XCTestCase {
         XCTAssertFalse(
             ThumbnailHoverFocus.shouldTemporarilyRaise(stubWindow(id: 4, minimized: true, hidden: true))
         )
+        XCTAssertFalse(ThumbnailHoverFocus.shouldTemporarilyRaise(stubWindow(id: 5, onScreen: false)))
     }
 
     func testPageClamps() {
