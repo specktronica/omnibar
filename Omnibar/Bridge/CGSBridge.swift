@@ -229,10 +229,20 @@ nonisolated final class CGSBridge: SpacesProviding, Sendable {
 
 private nonisolated enum DisplayUUID {
     private typealias Proc = @convention(c) (CGDirectDisplayID) -> Unmanaged<CFUUID>?
+    /// SkyLight first: macOS 26 exports `CGDisplayCreateUUIDFromDisplayID` from
+    /// SkyLight only. A nil lookup leaves every managed display at id 0, so
+    /// `currentSpaces` stays empty and windows on other Spaces are discarded.
     private static let proc: Proc? = {
-        let handle = dlopen("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics", RTLD_LAZY)
-        guard let handle, let symbol = dlsym(handle, "CGDisplayCreateUUIDFromDisplayID") else { return nil }
-        return unsafeBitCast(symbol, to: Proc.self)
+        let libraries = [
+            "/System/Library/PrivateFrameworks/SkyLight.framework/SkyLight",
+            "/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics",
+        ]
+        for path in libraries {
+            guard let handle = dlopen(path, RTLD_LAZY),
+                  let symbol = dlsym(handle, "CGDisplayCreateUUIDFromDisplayID") else { continue }
+            return unsafeBitCast(symbol, to: Proc.self)
+        }
+        return nil
     }()
 
     static func uuid(for displayID: CGDirectDisplayID) -> CFUUID? {
