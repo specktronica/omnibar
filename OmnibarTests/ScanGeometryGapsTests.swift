@@ -36,6 +36,13 @@ final class ScanGeometryGapsTests: XCTestCase {
         XCTAssertFalse(ScanGeometry.isAssignedOnlyToOtherSpaces(spaces: [11], visibleSpaces: []))
     }
 
+    func testForeignOwnerDropsAccessibilityClaim() {
+        XCTAssertFalse(ScanGeometry.accessibilityOwnsWindow(ownerPID: 22, walkedPID: 10))
+        XCTAssertTrue(ScanGeometry.accessibilityOwnsWindow(ownerPID: 10, walkedPID: 10))
+        XCTAssertTrue(ScanGeometry.accessibilityOwnsWindow(ownerPID: nil, walkedPID: 10))
+        XCTAssertTrue(ScanGeometry.accessibilityOwnsWindow(ownerPID: 0, walkedPID: 10))
+    }
+
     func testEmptyScreenSizesNeverMatch() {
         XCTAssertFalse(ScanGeometry.looksLikeFullscreen(
             CGRect(x: 0, y: 0, width: 1920, height: 1080),

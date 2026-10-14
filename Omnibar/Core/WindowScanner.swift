@@ -58,6 +58,16 @@ nonisolated enum ScanGeometry {
         guard !spaces.isEmpty, !visibleSpaces.isEmpty else { return false }
         return spaces.allSatisfy { !visibleSpaces.contains($0) }
     }
+
+    /// True when an Accessibility element may be labeled with the app being walked.
+    /// A different non-zero CoreGraphics owner means the element reported another
+    /// app's window id. That id has to stay out of the claimed set: windows on
+    /// inactive Spaces are absent from `kAXWindows`, so the real owner cannot
+    /// take the id back, and the other-space pass skips ids already claimed.
+    static func accessibilityOwnsWindow(ownerPID: pid_t?, walkedPID: pid_t) -> Bool {
+        guard let ownerPID, ownerPID != 0 else { return true }
+        return ownerPID == walkedPID
+    }
 }
 
 nonisolated struct ScanCoalescer: Equatable {
@@ -153,12 +163,12 @@ actor WindowScanner {
             var focusedID: CGWindowID?
             if app.pid == request.frontAppPID {
                 if let focused = AXBridge.focusedWindow(forApp: app.pid) {
-                    focusedID = cachedWindow(for: focused)?.windowID
+                    focusedID = cachedWindow(for: focused, walkedPID: app.pid, cgByID: cgByID)?.windowID
                 }
             }
 
             for axWindow in axWindows {
-                guard let cached = cachedWindow(for: axWindow) else { continue }
+                guard let cached = cachedWindow(for: axWindow, walkedPID: app.pid, cgByID: cgByID) else { continue }
                 let role = cached.role
                 guard role == (kAXWindowRole as String) || role.isEmpty else { continue }
                 let subrole = cached.subrole
@@ -290,9 +300,10 @@ actor WindowScanner {
 
         let listed = Set(windows.map(\.id))
         evict(keeping: listed)
-        for (id, element) in liveElements {
-            elementByWindowID[id] = element
-        }
+        // Only elements returned by this scan. A retained element for an
+        // other-space id makes a click raise the wrong window and skip the
+        // Space switch.
+        elementByWindowID = liveElements
 
         var elements: [CGWindowID: AXElementRef] = [:]
         elements.reserveCapacity(elementByWindowID.count)
@@ -380,12 +391,22 @@ actor WindowScanner {
         )
     }
 
-    private func cachedWindow(for element: AXUIElement) -> CachedWindow? {
+    private func cachedWindow(
+        for element: AXUIElement,
+        walkedPID: pid_t,
+        cgByID: [CGWindowID: [String: Any]]
+    ) -> CachedWindow? {
         let key = ElementIdentity(element: element)
         if let cached = cacheByElement[key] {
-            return cached
+            if Self.accessibilityOwns(cached.windowID, walkedPID: walkedPID, cgByID: cgByID) {
+                return cached
+            }
+            cacheByElement.removeValue(forKey: key)
         }
-        guard let windowID = AXBridge.cgWindowID(for: element) else { return nil }
+        guard let windowID = AXBridge.cgWindowID(for: element),
+              Self.accessibilityOwns(windowID, walkedPID: walkedPID, cgByID: cgByID) else {
+            return nil
+        }
         let cached = CachedWindow(
             windowID: windowID,
             role: AXBridge.role(of: element),
@@ -395,9 +416,17 @@ actor WindowScanner {
         return cached
     }
 
+    private static func accessibilityOwns(
+        _ windowID: CGWindowID,
+        walkedPID: pid_t,
+        cgByID: [CGWindowID: [String: Any]]
+    ) -> Bool {
+        let ownerPID = (cgByID[windowID]?[kCGWindowOwnerPID as String] as? NSNumber).map { pid_t($0.int32Value) }
+        return ScanGeometry.accessibilityOwnsWindow(ownerPID: ownerPID, walkedPID: walkedPID)
+    }
+
     private func evict(keeping windowIDs: Set<CGWindowID>) {
         cacheByElement = cacheByElement.filter { windowIDs.contains($0.value.windowID) }
-        elementByWindowID = elementByWindowID.filter { windowIDs.contains($0.key) }
     }
 
     private func bundleID(forDockItem element: AXUIElement, nameMap: [String: String]) -> String? {
