@@ -2,6 +2,8 @@
 
 Omnibar is a bottom-of-screen taskbar. It lists windows on the current Space (minimized windows stay on their last screen), optional pinned apps, and a Start button. **Show windows from all Spaces** also lists windows on other desktops. Tiles are grouped by application by default. There is no Dock icon while it is running, except during first-run onboarding.
 
+Apps whose last window was closed disappear from the window list even if the app is still running. Explicitly pinned apps remain as launchers. Clicking a window on another Space switches to that Space before focusing it; clicking a pin also uses an existing window on another screen or Space before reopening the app.
+
 ## First launch
 
 If Accessibility is not granted, an onboarding window appears. Continue stays disabled until Accessibility is on. The taskbar appears only after you click Continue (or close the window). Screen Recording and “Hide the Dock on the right” are optional on that screen. Granting Screen Recording in this session does not enable live thumbnails until Omnibar relaunches: the row marks as granted, the primary button becomes Restart (that button is enabled even if Accessibility is still off), and Enable Screen Recording stays available until the new process starts.

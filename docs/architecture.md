@@ -51,7 +51,7 @@ flowchart LR
 - screen parameter changes, settings/pins/blacklist/badge notifications
 - a repeating poll (`pollInterval`, minimum 0.5 s)
 
-`WindowScanner` (an actor) builds `WindowInfo` from Accessibility windows crossed with `CGWindowListCopyWindowInfo`. It keeps layer-0 windows of regular apps, skips a hard-coded system set and the blacklist, drops untitled floating windows (`AXFloatingWindow` / `AXSystemFloatingWindow` with an empty title), and drops frames smaller than 40×40 points. Accessibility only returns the visible Space, so the scanner also keeps layer-0 windows from the window list whose SkyLight Spaces are not visible.
+`WindowScanner` (an actor) builds `WindowInfo` from Accessibility windows crossed with `CGWindowListCopyWindowInfo`. It keeps layer-0 windows of regular apps, skips a hard-coded system set and the blacklist, drops untitled floating windows (`AXFloatingWindow` / `AXSystemFloatingWindow` with an empty title), and drops frames smaller than 40×40 points. Accessibility can omit windows on inactive Spaces, so the scanner also keeps layer-0 windows from the window list whose SkyLight Spaces are not visible. These fallback entries require a confirmed ordered-in state from SkyLight; closed windows retained by a running app are excluded even when their title, bounds, and Space assignment remain.
 
 Space membership and “this display is a fullscreen Space” come from private SkyLight symbols loaded in `CGSBridge` (`CGSCopyManagedDisplaySpaces` / `SLS…` and related). `TaskListLogic` then:
 
@@ -66,6 +66,8 @@ Space membership and “this display is a fullscreen Space” come from private 
 ## Actions and overlays
 
 `WindowActions` raises, minimizes, unminimizes, closes, fullscreens, hides, quits, and “New Window” through `AXBridge` and `NSRunningApplication`. Primary click and middle-click are handled there. The thin Show desktop slice on the right of each bar calls `ShowDesktopController`, which minimizes every visible window on the current Spaces and restores that set on the next click.
+
+When raising a window on an inactive Space, `WindowFocusController` requests the Space switch first and waits for a scan confirming the destination is visible before activating or restoring the window. Pending requests expire after five seconds and are replaced by later clicks. Pinned launchers search the complete window snapshot before reopening an app, including windows filtered out of the clicked taskbar.
 
 Each `TaskbarPanel` owns a `StartMenuPanel` and `ThumbnailPopover`. Thumbnails use ScreenCaptureKit (`ThumbnailService`) only when Screen Recording was already granted at process start (`PermissionsManager.screenRecordingTrusted`).
 

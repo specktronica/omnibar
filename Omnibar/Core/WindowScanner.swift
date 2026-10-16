@@ -46,8 +46,12 @@ nonisolated enum ScanGeometry {
 
     /// Accessibility does not list these windows. A named window is kept even when
     /// the window server reports an empty frame.
-    static func canListOffScreenWindow(layer: Int32, alpha: CGFloat, frame: CGRect, title: String) -> Bool {
-        guard layer == 0, alpha > 0 else { return false }
+    static func canListOffScreenWindow(
+        layer: Int32, alpha: CGFloat, frame: CGRect, title: String, isOrderedIn: Bool?
+    ) -> Bool {
+        // A retained, closed window can still have bounds, a title, and a Space.
+        // Without an AX element, require the window server to confirm it is open.
+        guard isOrderedIn == true, layer == 0, alpha > 0 else { return false }
         let sized = frame.width >= 40 && frame.height >= 40
         let named = !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         return sized || named
@@ -372,7 +376,13 @@ actor WindowScanner {
             let alpha = (info[kCGWindowAlpha as String] as? NSNumber)?.doubleValue ?? 1
             let title = info[kCGWindowName as String] as? String ?? ""
             let frame = Self.cgBounds(info)
-            guard ScanGeometry.canListOffScreenWindow(layer: layer, alpha: alpha, frame: frame, title: title) else {
+            guard ScanGeometry.canListOffScreenWindow(
+                layer: layer,
+                alpha: alpha,
+                frame: frame,
+                title: title,
+                isOrderedIn: spaces.isWindowOrderedIn(id)
+            ) else {
                 continue
             }
             foreign.append(OffScreenCandidate(id: id, app: app, title: title, frame: frame, layer: layer))

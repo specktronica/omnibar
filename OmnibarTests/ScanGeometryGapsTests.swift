@@ -17,16 +17,33 @@ final class ScanGeometryGapsTests: XCTestCase {
 
     func testOffScreenWindowNeedsSizeOrTitle() {
         let frame = CGRect(x: 0, y: 0, width: 800, height: 600)
-        XCTAssertTrue(ScanGeometry.canListOffScreenWindow(layer: 0, alpha: 1, frame: frame, title: ""))
+        XCTAssertTrue(ScanGeometry.canListOffScreenWindow(layer: 0, alpha: 1, frame: frame, title: "", isOrderedIn: true))
         XCTAssertTrue(ScanGeometry.canListOffScreenWindow(
             layer: 0,
             alpha: 1,
             frame: .zero,
-            title: "Notes"
+            title: "Notes",
+            isOrderedIn: true
         ))
-        XCTAssertFalse(ScanGeometry.canListOffScreenWindow(layer: 0, alpha: 1, frame: .zero, title: "  "))
-        XCTAssertFalse(ScanGeometry.canListOffScreenWindow(layer: 3, alpha: 1, frame: frame, title: "Menu"))
-        XCTAssertFalse(ScanGeometry.canListOffScreenWindow(layer: 0, alpha: 0, frame: frame, title: "Ghost"))
+        XCTAssertFalse(ScanGeometry.canListOffScreenWindow(layer: 0, alpha: 1, frame: .zero, title: "  ", isOrderedIn: true))
+        XCTAssertFalse(ScanGeometry.canListOffScreenWindow(layer: 3, alpha: 1, frame: frame, title: "Menu", isOrderedIn: true))
+        XCTAssertFalse(ScanGeometry.canListOffScreenWindow(layer: 0, alpha: 0, frame: frame, title: "Ghost", isOrderedIn: true))
+    }
+
+    func testClosedRetainedWindowsAreNotListedOnOtherSpaces() {
+        let frame = CGRect(x: 0, y: 0, width: 800, height: 600)
+        // Closing the last window need not remove its CG record or Space assignment.
+        for orderedIn: Bool? in [false, nil] {
+            XCTAssertFalse(ScanGeometry.canListOffScreenWindow(
+                layer: 0, alpha: 1, frame: frame, title: "Last document", isOrderedIn: orderedIn
+            ))
+            XCTAssertFalse(ScanGeometry.canListOffScreenWindow(
+                layer: 0, alpha: 1, frame: .zero, title: "Last document", isOrderedIn: orderedIn
+            ))
+        }
+        XCTAssertTrue(ScanGeometry.canListOffScreenWindow(
+            layer: 0, alpha: 1, frame: frame, title: "Open on another desktop", isOrderedIn: true
+        ))
     }
 
     func testOtherSpacesRequireAHiddenSpace() {

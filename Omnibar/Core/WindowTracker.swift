@@ -225,7 +225,7 @@ final class WindowTracker {
         lastScan = result
         elementCache = result.elements
         rebuildItems(from: result)
-        WindowActions.completePendingFocus(windows: result.windows)
+        WindowActions.completePendingFocus(windows: result.windows, currentSpaces: result.currentSpaces)
         if coalescer.finish() {
             startScanIfNeeded()
         }

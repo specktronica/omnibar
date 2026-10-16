@@ -8,6 +8,7 @@ nonisolated protocol SpacesProviding: AnyObject, Sendable {
     func currentSpace(forDisplay displayID: CGDirectDisplayID) -> UInt64?
     func isFullscreenSpace(_ space: UInt64) -> Bool
     func spaces(forWindowIDs ids: [CGWindowID]) -> [CGWindowID: [UInt64]]
+    func isWindowOrderedIn(_ id: CGWindowID) -> Bool?
     func displaySpaceState(displayIDs: [CGDirectDisplayID]) -> (
         current: [CGDirectDisplayID: UInt64],
         fullscreen: Set<CGDirectDisplayID>
@@ -23,6 +24,7 @@ nonisolated final class CGSBridge: SpacesProviding, Sendable {
     private typealias ManagedDisplayGetCurrentSpaceProc = @convention(c) (CGSConnectionID, CFString) -> CGSSpaceID
     private typealias SpaceGetTypeProc = @convention(c) (CGSConnectionID, CGSSpaceID) -> Int32
     private typealias SetCurrentSpaceProc = @convention(c) (CGSConnectionID, CFString, CGSSpaceID) -> Void
+    private typealias WindowIsOrderedInProc = @convention(c) (CGSConnectionID, CGWindowID, UnsafeMutablePointer<UInt8>) -> Int32
 
     private let mainConnection: MainConnectionProc?
     private let copyManagedDisplaySpaces: CopyManagedDisplaySpacesProc?
@@ -30,6 +32,7 @@ nonisolated final class CGSBridge: SpacesProviding, Sendable {
     private let managedDisplayGetCurrentSpace: ManagedDisplayGetCurrentSpaceProc?
     private let spaceGetType: SpaceGetTypeProc?
     private let setCurrentSpaceProc: SetCurrentSpaceProc?
+    private let windowIsOrderedInProc: WindowIsOrderedInProc?
     private let connection: CGSConnectionID
 
     private static let allSpacesSelector: Int32 = 7
@@ -53,6 +56,8 @@ nonisolated final class CGSBridge: SpacesProviding, Sendable {
             ?? load("SLSSpaceGetType", as: SpaceGetTypeProc.self)
         setCurrentSpaceProc = load("SLSManagedDisplaySetCurrentSpace", as: SetCurrentSpaceProc.self)
             ?? load("CGSManagedDisplaySetCurrentSpace", as: SetCurrentSpaceProc.self)
+        windowIsOrderedInProc = load("SLSWindowIsOrderedIn", as: WindowIsOrderedInProc.self)
+            ?? load("CGSWindowIsOrderedIn", as: WindowIsOrderedInProc.self)
         connection = mainConnection?() ?? 0
     }
 
@@ -143,13 +148,20 @@ nonisolated final class CGSBridge: SpacesProviding, Sendable {
         return result
     }
 
-    /// Switches to the first Space in `spaces` that is not already visible.
-    /// Returns true only when a switch was issued.
-    func revealSpace(forWindow spaces: [UInt64]) -> Bool {
-        guard !spaces.isEmpty, setCurrentSpaceProc != nil, let parsed = managedSpaces() else { return false }
-        let visible = Set(parsed.map(\.currentSpace))
-        guard let hidden = spaces.first(where: { !visible.contains($0) }) else { return false }
-        return switchToSpace(hidden)
+    /// Ordered-in windows can belong to an inactive Space. Closed windows retained
+    /// by a running app are ordered out, even if they still have a title and Space.
+    func isWindowOrderedIn(_ id: CGWindowID) -> Bool? {
+        guard let proc = windowIsOrderedInProc else { return nil }
+        var orderedIn: UInt8 = 0
+        guard proc(connection, id, &orderedIn) == 0 else { return nil }
+        return orderedIn != 0
+    }
+
+    func spaceState(forWindow spaces: [UInt64]) -> WindowSpaceState {
+        WindowSpaceState(
+            windowSpaces: spaces,
+            visibleSpaces: Set(managedSpaces()?.map(\.currentSpace) ?? [])
+        )
     }
 
     /// Makes `space` the visible Space on the display that owns it.
