@@ -241,6 +241,7 @@ private struct BehaviorPane: View {
             Toggle("Show tabs as individual items", isOn: $settings.showTabsAsItems)
             Toggle("Indicate minimized or hidden windows", isOn: $settings.indicateMinimizedHidden)
             Toggle("Hide the app instead of minimizing on click", isOn: $settings.hideOnClickInsteadOfMinimize)
+            Toggle("Quit the app when closing its last window", isOn: $settings.quitAppOnLastWindowClose)
             Toggle("Show desktop button on the right edge", isOn: $settings.showDesktopButton)
             Toggle("Allow drag and drop reordering", isOn: $settings.allowDragReorder)
             Toggle("Keep task order when a window changes Space", isOn: $settings.keepOrderAcrossSpaceChange)

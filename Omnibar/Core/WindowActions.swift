@@ -139,10 +139,37 @@ enum WindowActions {
         NSRunningApplication(processIdentifier: pid)?.hide()
     }
 
+    /// Close from Omnibar. With `quitAppOnLastWindowClose` on, closing the app's
+    /// only window quits the app instead, so it can still ask about unsaved changes.
     static func close(_ window: WindowInfo) {
+        if shouldQuitInsteadOfClosing(
+            window,
+            windows: WindowTracker.shared.snapshot.windows,
+            settings: SettingsStore.shared.settings
+        ) {
+            quit(pid: window.pid)
+            return
+        }
         if let element = element(for: window) {
             AXBridge.pressCloseButton(element)
         }
+    }
+
+    /// Finder keeps the desktop alive, so it is never quit this way.
+    static let neverQuitOnLastWindowClose: Set<String> = ["com.apple.finder"]
+
+    /// `windows` is every window Omnibar tracks, on all screens and Spaces,
+    /// not just the tiles on one bar.
+    static func shouldQuitInsteadOfClosing(
+        _ window: WindowInfo,
+        windows: [WindowInfo],
+        settings: AppSettings
+    ) -> Bool {
+        guard settings.quitAppOnLastWindowClose else { return false }
+        if let bundleID = window.bundleID, neverQuitOnLastWindowClose.contains(bundleID) {
+            return false
+        }
+        return !windows.contains { $0.pid == window.pid && $0.id != window.id }
     }
 
     static func fullscreen(_ window: WindowInfo) {

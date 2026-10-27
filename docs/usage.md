@@ -41,7 +41,11 @@ Right-click a tile:
 
 ### Hover thumbnails
 
-The popover shows up to three cards at a time and pages when a group has more. Live captures need Screen Recording; otherwise the card uses the app icon. Cards have close / minimize / zoom (Option or a fullscreen window uses fullscreen instead of zoom). A card for a window on another Space says “Another Space” in the title row, including when thumbnail titles are off. Hovering a card temporarily raises that window when it is already on screen. A minimized, hidden, or other-Space window stays that way until the card is clicked. Leaving the popover restores the previous front window unless you clicked a card.
+The popover shows up to three cards at a time and pages when a group has more. Live captures need Screen Recording; otherwise the card uses the app icon. Cards have close / minimize / zoom (Option or a fullscreen window uses fullscreen instead of zoom). Middle-clicking a card closes that window. A card for a window on another Space says “Another Space” in the title row, including when thumbnail titles are off. Hovering a card temporarily raises that window when it is already on screen. A minimized, hidden, or other-Space window stays that way until the card is clicked. Leaving the popover restores the previous front window unless you clicked a card.
+
+### Quit on last window close
+
+With **Quit the app when closing its last window** on (Settings → Behavior, off by default), closing a window from Omnibar quits the app when it has no other window that Omnibar lists, counting minimized windows and windows on every screen and Space. This covers the card close button, middle-clicking a card, and **Close** in the window menu. Omnibar sends a normal Quit, so the app can still ask about unsaved changes. Closing a window inside the app (its own close button or ⌘W) is not affected. Panels and palettes that Omnibar does not list are not counted, so an open palette does not keep the app running. Finder is never quit this way.
 
 ## Start Menu
 
@@ -84,7 +88,7 @@ Open from the menu extra, the taskbar **Taskbar → Settings…** item, or by re
 | --- | --- |
 | General | Launch at login, hide the Dock on the right, auto-hide taskbar, Start button action |
 | Appearance | Match system appearance or force dark, transparency, bar height, font size, icons-only, Start logo presets and per-lobe colors |
-| Behavior | Group by application, show tabs as items, indicate minimized/hidden, hide instead of minimize on click, Show desktop button, drag reorder, keep order across Space changes, auto-resize overlapping windows |
+| Behavior | Group by application, show tabs as items, indicate minimized/hidden, hide instead of minimize on click, quit the app when closing its last window, Show desktop button, drag reorder, keep order across Space changes, auto-resize overlapping windows |
 | Tiling | Keyboard tiling on/off, modifier set (Control + Option, Control, Control + Command, Control + Option + Command), current shortcuts, Mission Control note when Control alone is selected |
 | Thumbnails | Hover delay, size, title in thumbnail, request Screen Recording |
 | Displays | Main display only, show windows from all screens, show windows from all Spaces, per-display visibility |
@@ -109,6 +113,7 @@ Reset to defaults restores `AppSettings.default` except **Launch at login**, whi
 | Show tabs as individual items | on |
 | Indicate minimized or hidden | on |
 | Hide instead of minimize on click | off |
+| Quit the app when closing its last window | off |
 | Show desktop button | on |
 | Thumbnail delay | 0.4 s (0–1.5) |
 | Thumbnail size | 240 (140–420) |
