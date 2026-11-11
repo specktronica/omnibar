@@ -7,6 +7,7 @@ build:
 
 run: build
 	-killall Omnibar
+	@while pgrep -x Omnibar >/dev/null; do sleep 0.1; done
 	open "$(APP)"
 
 # Developer ID sign, notarize, staple, zip to build/Omnibar-<version>.zip

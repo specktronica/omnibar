@@ -98,6 +98,41 @@ nonisolated enum AXBridge {
         windows(forApp: pid).first { cgWindowID(for: $0) == windowID }
     }
 
+    /// Window ids the app reports, or nil when it did not answer. Unlike
+    /// `windows(forApp:)`, a slow app is not mistaken for one with no windows.
+    static func windowIDsIfAnswered(forApp pid: pid_t) -> Set<CGWindowID>? {
+        var value: CFTypeRef?
+        let err = AXUIElementCopyAttributeValue(application(pid: pid), kAXWindowsAttribute as CFString, &value)
+        switch err {
+        case .success:
+            let windows = value as? [AXUIElement] ?? []
+            return Set(windows.compactMap(cgWindowID(for:)))
+        case .noValue:
+            return []
+        default:
+            return nil
+        }
+    }
+
+    /// The window whose title-bar close button is at `point` (global CG
+    /// coordinates, top-left origin), or nil when something else is there.
+    static func closeButtonWindow(at point: CGPoint) -> (pid: pid_t, windowID: CGWindowID)? {
+        var hit: AXUIElement?
+        let systemWide = AXUIElementCreateSystemWide()
+        guard AXUIElementCopyElementAtPosition(systemWide, Float(point.x), Float(point.y), &hit) == .success,
+              let hit,
+              subrole(of: hit) == kAXCloseButtonSubrole as String else {
+            return nil
+        }
+        var pid: pid_t = 0
+        guard AXUIElementGetPid(hit, &pid) == .success,
+              let window = copyElement(hit, attribute: kAXWindowAttribute as String),
+              let windowID = cgWindowID(for: window) else {
+            return nil
+        }
+        return (pid, windowID)
+    }
+
     static func copyString(_ element: AXUIElement, attribute: String) -> String? {
         var value: CFTypeRef?
         let err = AXUIElementCopyAttributeValue(element, attribute as CFString, &value)

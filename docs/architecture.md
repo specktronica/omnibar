@@ -25,9 +25,9 @@ scripts/        bootstrap (XcodeGen), build, clean, package/notarize, Homebrew p
 2. Create the menu extra (`StatusItemController`).
 3. Start `AppCatalog` (application directories + recents).
 4. Move the Dock to the right edge and hide it when that setting is on (`DockManager`).
-5. If Accessibility is trusted, start `WindowTracker`, `ScreenMonitor`, `TilingHotkeys`, and `StartMenuHotkey`. Otherwise show onboarding. The taskbar does not start while onboarding is showing; Continue (or closing the window) posts `.omnibarPermissionsDidChange` after `isShowing` is cleared. Screen Recording is effective for capture only when `CGPreflightScreenCaptureAccess()` was already true at process start. A mid-session grant is pending restart: preflight stays false until relaunch, so onboarding detects the TCC toggle via other processes’ normal-level window titles (`kCGWindowName`). Windows not at the normal window level (menu bar, wallpaper, Dock, Control Center) are ignored because those titles appear without Screen Recording.
+5. If Accessibility is trusted, start `WindowTracker`, `ScreenMonitor`, `TilingHotkeys`, `StartMenuHotkey`, and `CloseButtonMonitor`. Otherwise show onboarding. The taskbar does not start while onboarding is showing; Continue (or closing the window) posts `.omnibarPermissionsDidChange` after `isShowing` is cleared. Screen Recording is effective for capture only when `CGPreflightScreenCaptureAccess()` was already true at process start. A mid-session grant is pending restart: preflight stays false until relaunch, so onboarding detects the TCC toggle via other processes’ normal-level window titles (`kCGWindowName`). Windows not at the normal window level (menu bar, wallpaper, Dock, Control Center) are ignored because those titles appear without Screen Recording.
 
-On quit, Dock prefs are restored, then hotkeys, tracker, screen monitor, and catalog stop.
+On quit, Dock prefs are restored, then hotkeys, the close-button monitor, tracker, screen monitor, and catalog stop.
 
 ## Window list pipeline
 
@@ -68,6 +68,8 @@ Space membership and “this display is a fullscreen Space” come from private 
 `WindowActions` raises, minimizes, unminimizes, closes, fullscreens, hides, quits, and “New Window” through `AXBridge` and `NSRunningApplication`. Primary click and middle-click are handled there. The thin Show desktop slice on the right of each bar calls `ShowDesktopController`, which minimizes every visible window on the current Spaces and restores that set on the next click.
 
 When raising a window on an inactive Space, `WindowFocusController` requests the Space switch first and waits for a scan confirming the destination is visible before activating or restoring the window. Pending requests expire after five seconds and are replaced by later clicks. Pinned launchers search the complete window snapshot before reopening an app, including windows filtered out of the clicked taskbar.
+
+With `quitAppOnLastWindowClose` on, `CloseButtonMonitor` also handles the red close button inside other apps. A global `NSEvent` left-mouse-down monitor hit-tests the click with `AXUIElementCopyElementAtPosition` on a background queue. It only does this for clicks inside an on-screen window Omnibar lists. A hit counts when the element's subrole is `AXCloseButton` and its window is in the snapshot, Finder and Omnibar excluded. The click is never blocked. After each scan, `CloseButtonQuitTracker` checks the watched windows. Once one is gone and the snapshot lists no window for its app, the monitor confirms before quitting: SkyLight must report the window ordered out, and the app must answer `kAXWindows` with none of the windows Omnibar listed for it. A scan can drop the windows of an app slow to answer Accessibility, so the snapshot alone is not trusted. A watched window that is still open after 60 seconds stops being watched, which leaves time to answer a save dialog. Once the window is gone, the app's other windows have 3 seconds to close too, so tabs closing a scan later still count.
 
 Each `TaskbarPanel` owns a `StartMenuPanel` and `ThumbnailPopover`. Thumbnails use ScreenCaptureKit (`ThumbnailService`) only when Screen Recording was already granted at process start (`PermissionsManager.screenRecordingTrusted`).
 
@@ -114,6 +116,7 @@ All of these are keys in `UserDefaults.standard`:
 | Window frames, on-screen set, layers | `CGWindowListCopyWindowInfo` |
 | Tiling hotkeys | Carbon `RegisterEventHotKey` |
 | Start Menu shortcut | `NSEvent` modifier and key monitors |
+| Quit on the red close button | `NSEvent` left-mouse-down monitor + Accessibility hit-test |
 | Spaces and fullscreen Spaces | SkyLight (`dlopen` of `CGS*` / `SLS*` symbols) |
 | Live thumbnails | ScreenCaptureKit |
 | Launch at login | `SMAppService.mainApp` |

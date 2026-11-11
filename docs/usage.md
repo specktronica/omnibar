@@ -45,7 +45,12 @@ The popover shows up to three cards at a time and pages when a group has more. L
 
 ### Quit on last window close
 
-With **Quit the app when closing its last window** on (Settings → Behavior, off by default), closing a window from Omnibar quits the app when it has no other window that Omnibar lists, counting minimized windows and windows on every screen and Space. This covers the card close button, middle-clicking a card, and **Close** in the window menu. Omnibar sends a normal Quit, so the app can still ask about unsaved changes. Closing a window inside the app (its own close button or ⌘W) is not affected. Panels and palettes that Omnibar does not list are not counted, so an open palette does not keep the app running. Finder is never quit this way.
+With **Quit the app when closing its last window** on (Settings → Behavior, off by default), closing an app's last window quits the app. Only windows Omnibar lists count, including minimized windows and windows on every screen and Space. Panels and palettes that Omnibar does not list are not counted, so an open palette does not keep the app running. Finder is never quit this way.
+
+- **From Omnibar** (the card close button, middle-clicking a card, or **Close** in the window menu): Omnibar quits the app instead of closing the window. It sends a normal Quit, so the app can still ask about unsaved changes.
+- **The app's own red close button**: the window closes as usual. Once it is gone, Omnibar quits the app if no other window is left. If the app asks about unsaved changes and you cancel, the window and the app stay open. Closing a palette, or a window of a blacklisted app, does nothing extra.
+
+⌘W and **File → Close** are not affected. Neither are apps that draw their own title-bar buttons instead of the standard macOS ones.
 
 ## Start Menu
 
