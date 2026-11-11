@@ -149,6 +149,10 @@ When **Hide the Dock on the right** is on (the default, including the first laun
 
 The bar moves off the bottom of the display (2 points remain visible) when the cursor leaves it, the Start Menu, and the thumbnail. An open Start Menu keeps its bar visible until the menu closes. A 3-point hot strip along the bottom of the taskbar, or moving onto the bar, shows it again.
 
+### Windows that overlap the bar
+
+With **Auto-resize windows that overlap Taskbar** on (the default), a window that opens over the bar, or is zoomed to fill the screen (for example by double-clicking its title bar), is shortened so its bottom edge sits on top of the bar. Only the height changes. Zooming the window again puts back the size and position it had before the first zoom, as it would without Omnibar. Omnibar forgets that earlier size once you move or resize the window yourself, close it, turn this setting off, or quit Omnibar. A window that opened over the bar has no earlier size, so zooming it again only shortens it again. Resizing happens shortly after the window stops moving, and only on displays where Omnibar shows a bar (an auto-hidden bar counts). Fullscreen, minimized, and hidden windows, and windows the app does not let you resize, are left alone. If an app pushes its window back over the bar twice in a row, Omnibar stops resizing that app's windows until Omnibar restarts.
+
 ### Pins, blacklist, overlap skip
 
 Pins, blacklist, and overlap-skip entries are bundle identifiers (for example `com.apple.Safari`). Blacklisted apps never appear as tiles. Overlap skip prevents auto-resize of that app’s windows. Pins that are running show as normal tiles; pins with no windows stay as launchers.

@@ -316,6 +316,8 @@ final class WindowTracker {
 
         if settings.autoResizeOverlapping {
             OverlapResizer.shared.handle(windows: windows)
+        } else {
+            OverlapResizer.shared.reset()
         }
     }
 

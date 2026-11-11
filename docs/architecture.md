@@ -73,7 +73,9 @@ With `quitAppOnLastWindowClose` on, `CloseButtonMonitor` also handles the red cl
 
 Each `TaskbarPanel` owns a `StartMenuPanel` and `ThumbnailPopover`. Thumbnails use ScreenCaptureKit (`ThumbnailService`) only when Screen Recording was already granted at process start (`PermissionsManager.screenRecordingTrusted`).
 
-`OverlapResizer` optionally shrinks windows whose Cocoa frames intersect the bar, skipping fullscreen/minimized/hidden windows, a bundle skip list, and PIDs that failed verification twice.
+`OverlapResizer` optionally shrinks the height of windows whose frames intersect the bar, on displays where `ScreenMonitor.showsTaskbar(on:)` is true. It skips fullscreen/minimized/hidden windows, windows whose `kAXSizeAttribute` is not settable, a bundle skip list, and PIDs that failed verification twice in a row. Verification re-reads the Accessibility frame 0.15 s later; that frame has a top-left origin and goes through `ScreenGeometry.cocoaRect` before the bar test.
+
+Zooming changes a window's frame, so macOS no longer treats the shortened window as zoomed, and a second zoom grows it over the bar again. To keep zoom working as a toggle, `OverlapResizer` keeps a `FitMemory` per window ID: the last frame seen clear of the bar, the frame confirmed by verification after a fit, and the frame from before the window covered the bar. `OverlapGeometry.fitAction` turns each pass into `.none`, `.fit`, or `.restore`. A window still at its fitted frame (within `TilingGeometry.frameTolerance`) that grows downward again, with its top edge not lowered, gets the earlier frame back through `AXBridge.setFrame`. Seeing the window clear of the bar at any other frame clears the fitted and earlier frames. Memory is pruned to the scanned window IDs each pass and cleared with `reset()`, which `WindowTracker` calls while auto-resize is off.
 
 `DockBadgeReader` reads badge strings from Dock via Accessibility on a 2 s timer.
 
