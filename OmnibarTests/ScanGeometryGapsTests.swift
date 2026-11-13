@@ -46,6 +46,32 @@ final class ScanGeometryGapsTests: XCTestCase {
         ))
     }
 
+    func testUntitledUnknownSubroleIsNotATask() {
+        // Chrome's full-screen toolbar strips and transition snapshot.
+        XCTAssertTrue(ScanGeometry.requiresTitle(subrole: "AXUnknown"))
+        XCTAssertTrue(ScanGeometry.requiresTitle(subrole: "AXFloatingWindow"))
+        XCTAssertTrue(ScanGeometry.requiresTitle(subrole: "AXSystemFloatingWindow"))
+        XCTAssertFalse(ScanGeometry.requiresTitle(subrole: "AXStandardWindow"))
+        XCTAssertFalse(ScanGeometry.requiresTitle(subrole: "AXDialog"))
+        XCTAssertFalse(ScanGeometry.requiresTitle(subrole: ""))
+    }
+
+    func testWindowServerTagsSeparateAppWindowsFromChromeStrips() {
+        // Tags read from SkyLight on macOS 26 with Chrome 157 in full screen.
+        let chromeWindow = WindowServerTraits(parentID: 0, tags: 0x0300_0401_0008_2401)
+        let systemSettings = WindowServerTraits(parentID: 0, tags: 0x0000_0001_0048_2001)
+        XCTAssertTrue(ScanGeometry.isAppWindow(chromeWindow))
+        XCTAssertTrue(ScanGeometry.isAppWindow(systemSettings))
+        XCTAssertTrue(ScanGeometry.isAppWindow(WindowServerTraits(parentID: 0, tags: 0x8000_0002)))
+
+        let stripContainer = WindowServerTraits(parentID: 0, tags: 0x0804_0401_400C_2080)
+        let tabStrip = WindowServerTraits(parentID: 23497, tags: 0x0000_0001_400C_2282)
+        XCTAssertFalse(ScanGeometry.isAppWindow(stripContainer))
+        XCTAssertFalse(ScanGeometry.isAppWindow(tabStrip))
+        XCTAssertFalse(ScanGeometry.isAppWindow(WindowServerTraits(parentID: 23497, tags: 0x1)))
+        XCTAssertFalse(ScanGeometry.isAppWindow(WindowServerTraits(parentID: 0, tags: 0x2)))
+    }
+
     func testOtherSpacesRequireAHiddenSpace() {
         XCTAssertTrue(ScanGeometry.isAssignedOnlyToOtherSpaces(spaces: [11], visibleSpaces: [10]))
         XCTAssertFalse(ScanGeometry.isAssignedOnlyToOtherSpaces(spaces: [10, 11], visibleSpaces: [10]))

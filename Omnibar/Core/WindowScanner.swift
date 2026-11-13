@@ -57,6 +57,25 @@ nonisolated enum ScanGeometry {
         return sized || named
     }
 
+    /// Untitled windows with these subroles are app chrome, not tasks. Chrome
+    /// reports its full-screen toolbar strips and the snapshot it animates while
+    /// entering or leaving full screen as untitled `AXUnknown` windows.
+    static func requiresTitle(subrole: String) -> Bool {
+        subrole == "AXFloatingWindow" || subrole == "AXSystemFloatingWindow" || subrole == "AXUnknown"
+    }
+
+    /// Off-screen candidates have no Accessibility subrole, so the window server
+    /// decides. App windows are top-level and carry tag bit 0x1, or bits 0x2 and
+    /// 0x8000_0000 together; yabai applies the same test to windows on other
+    /// Spaces. Chrome's full-screen toolbar strips are child windows or carry
+    /// neither tag, yet stay ordered in on their hidden full-screen Space.
+    static func isAppWindow(_ traits: WindowServerTraits) -> Bool {
+        guard traits.parentID == 0 else { return false }
+        let tagged = traits.tags & 0x1 != 0
+        let taggedAlternate = traits.tags & 0x2 != 0 && traits.tags & 0x8000_0000 != 0
+        return tagged || taggedAlternate
+    }
+
     /// True when the window belongs only to Spaces that are not visible on any display.
     static func isAssignedOnlyToOtherSpaces(spaces: [UInt64], visibleSpaces: Set<UInt64>) -> Bool {
         guard !spaces.isEmpty, !visibleSpaces.isEmpty else { return false }
@@ -177,7 +196,7 @@ actor WindowScanner {
                 guard role == (kAXWindowRole as String) || role.isEmpty else { continue }
                 let subrole = cached.subrole
                 var title: String?
-                if subrole == "AXFloatingWindow" || subrole == "AXSystemFloatingWindow" {
+                if ScanGeometry.requiresTitle(subrole: subrole) {
                     let value = AXBridge.title(of: axWindow)
                     if value.isEmpty { continue }
                     title = value
@@ -386,6 +405,13 @@ actor WindowScanner {
                 continue
             }
             foreign.append(OffScreenCandidate(id: id, app: app, title: title, frame: frame, layer: layer))
+        }
+        // Unknown traits keep the window, so a missing SkyLight export cannot
+        // drop every window on other Spaces.
+        if !foreign.isEmpty, let traits = spaces.windowServerTraits(forWindowIDs: foreign.map(\.id)) {
+            foreign.removeAll { candidate in
+                traits[candidate.id].map { !ScanGeometry.isAppWindow($0) } ?? false
+            }
         }
         foreign.sort { $0.id < $1.id }
         return foreign

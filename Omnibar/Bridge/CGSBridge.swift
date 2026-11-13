@@ -4,11 +4,20 @@ import Foundation
 typealias CGSConnectionID = Int32
 typealias CGSSpaceID = UInt64
 
+/// What the window server records about a window, independent of Accessibility.
+nonisolated struct WindowServerTraits: Equatable, Sendable {
+    var parentID: CGWindowID
+    var tags: UInt64
+}
+
 nonisolated protocol SpacesProviding: AnyObject, Sendable {
     func currentSpace(forDisplay displayID: CGDirectDisplayID) -> UInt64?
     func isFullscreenSpace(_ space: UInt64) -> Bool
     func spaces(forWindowIDs ids: [CGWindowID]) -> [CGWindowID: [UInt64]]
     func isWindowOrderedIn(_ id: CGWindowID) -> Bool?
+    /// Ids the window server does not return are absent. Nil when SkyLight
+    /// does not export the window query.
+    func windowServerTraits(forWindowIDs ids: [CGWindowID]) -> [CGWindowID: WindowServerTraits]?
     func displaySpaceState(displayIDs: [CGDirectDisplayID]) -> (
         current: [CGDirectDisplayID: UInt64],
         fullscreen: Set<CGDirectDisplayID>
@@ -25,6 +34,11 @@ nonisolated final class CGSBridge: SpacesProviding, Sendable {
     private typealias SpaceGetTypeProc = @convention(c) (CGSConnectionID, CGSSpaceID) -> Int32
     private typealias SetCurrentSpaceProc = @convention(c) (CGSConnectionID, CFString, CGSSpaceID) -> Void
     private typealias WindowIsOrderedInProc = @convention(c) (CGSConnectionID, CGWindowID, UnsafeMutablePointer<UInt8>) -> Int32
+    private typealias WindowQueryWindowsProc = @convention(c) (CGSConnectionID, CFArray, UInt32) -> Unmanaged<CFTypeRef>?
+    private typealias WindowQueryResultCopyWindowsProc = @convention(c) (CFTypeRef) -> Unmanaged<CFTypeRef>?
+    private typealias WindowIteratorAdvanceProc = @convention(c) (CFTypeRef) -> Bool
+    private typealias WindowIteratorIDProc = @convention(c) (CFTypeRef) -> UInt32
+    private typealias WindowIteratorTagsProc = @convention(c) (CFTypeRef) -> UInt64
 
     private let mainConnection: MainConnectionProc?
     private let copyManagedDisplaySpaces: CopyManagedDisplaySpacesProc?
@@ -33,6 +47,14 @@ nonisolated final class CGSBridge: SpacesProviding, Sendable {
     private let spaceGetType: SpaceGetTypeProc?
     private let setCurrentSpaceProc: SetCurrentSpaceProc?
     private let windowIsOrderedInProc: WindowIsOrderedInProc?
+    private let windowQuery: (
+        query: WindowQueryWindowsProc,
+        copyWindows: WindowQueryResultCopyWindowsProc,
+        advance: WindowIteratorAdvanceProc,
+        windowID: WindowIteratorIDProc,
+        parentID: WindowIteratorIDProc,
+        tags: WindowIteratorTagsProc
+    )?
     private let connection: CGSConnectionID
 
     private static let allSpacesSelector: Int32 = 7
@@ -58,6 +80,16 @@ nonisolated final class CGSBridge: SpacesProviding, Sendable {
             ?? load("CGSManagedDisplaySetCurrentSpace", as: SetCurrentSpaceProc.self)
         windowIsOrderedInProc = load("SLSWindowIsOrderedIn", as: WindowIsOrderedInProc.self)
             ?? load("CGSWindowIsOrderedIn", as: WindowIsOrderedInProc.self)
+        if let query = load("SLSWindowQueryWindows", as: WindowQueryWindowsProc.self),
+           let copyWindows = load("SLSWindowQueryResultCopyWindows", as: WindowQueryResultCopyWindowsProc.self),
+           let advance = load("SLSWindowIteratorAdvance", as: WindowIteratorAdvanceProc.self),
+           let windowID = load("SLSWindowIteratorGetWindowID", as: WindowIteratorIDProc.self),
+           let parentID = load("SLSWindowIteratorGetParentID", as: WindowIteratorIDProc.self),
+           let tags = load("SLSWindowIteratorGetTags", as: WindowIteratorTagsProc.self) {
+            windowQuery = (query, copyWindows, advance, windowID, parentID, tags)
+        } else {
+            windowQuery = nil
+        }
         connection = mainConnection?() ?? 0
     }
 
@@ -155,6 +187,24 @@ nonisolated final class CGSBridge: SpacesProviding, Sendable {
         var orderedIn: UInt8 = 0
         guard proc(connection, id, &orderedIn) == 0 else { return nil }
         return orderedIn != 0
+    }
+
+    func windowServerTraits(forWindowIDs ids: [CGWindowID]) -> [CGWindowID: WindowServerTraits]? {
+        guard let windowQuery else { return nil }
+        guard !ids.isEmpty else { return [:] }
+        let numbers = ids.map { NSNumber(value: $0) } as CFArray
+        guard let query = windowQuery.query(connection, numbers, UInt32(ids.count))?.takeRetainedValue(),
+              let iterator = windowQuery.copyWindows(query)?.takeRetainedValue() else {
+            return nil
+        }
+        var result: [CGWindowID: WindowServerTraits] = [:]
+        while windowQuery.advance(iterator) {
+            result[windowQuery.windowID(iterator)] = WindowServerTraits(
+                parentID: windowQuery.parentID(iterator),
+                tags: windowQuery.tags(iterator)
+            )
+        }
+        return result
     }
 
     func spaceState(forWindow spaces: [UInt64]) -> WindowSpaceState {
